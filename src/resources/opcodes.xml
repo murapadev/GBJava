@@ -1,0 +1,17 @@
+<opcodes>
+	<opcode code="0x2C" name="INC1" operands="L">
+		// ... (lineas para modificar flags)
+		Register reg = () // get register from memory map
+		reg += 1;
+		update(register);
+	</opcode>
+
+	<opcode code="0x2D" name="INC2" operands="L">
+		// ... (lineas para modificar flags)
+		Register reg = () // get register from memory map
+		reg += 2;
+		update(register);
+	</opcode>
+
+	<!-- ... -->
+</opcodes>
