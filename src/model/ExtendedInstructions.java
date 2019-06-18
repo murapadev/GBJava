@@ -16,4 +16,6 @@ public class ExtendedInstructions {
     public String dissasembly(byte extendedInstructionCode) {
         return ExtendedInstructionsDisassembly[extendedInstructionCode / 8] + " " + Targets[extendedInstructionCode % 8];
      }
+
+     //TODO: Maybe this will be discontinued.
 }

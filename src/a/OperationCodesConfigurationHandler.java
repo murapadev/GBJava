@@ -32,8 +32,8 @@ public class OperationCodesConfigurationHandler extends BaseConfigurationHandler
 				for (int i = 0; i < attributes.getLength(); i++) {
 					attribute = attributes.getQName(i);
 					switch (attribute.toLowerCase()) {
-						case "hexadecimal":
-							current.setOpcode(Byte.parseByte(attributes.getValue(i)));
+						case "code":
+							current.setOpcode(Byte.parseByte(attributes.getValue(i).replace("0x",""),16));
 							break;
 						case "name":
 							ReflectionUtils.<OperationCode, String>modifyAttribute(current, "name", attributes.getValue(i));
