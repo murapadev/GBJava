@@ -15,9 +15,9 @@ public class OperationCodesParseTest {
 	String path = OperationCodesParseTest.class.getClassLoader().getResource("opcodes.xml").getPath();
 	
 	try {
-		Map<Byte, OperationCode> opcodes = XMLLoader.load(new OperationCodesConfigurationHandler(new HashMap()), path);
-		for (byte s : opcodes.keySet()) {
-			System.out.println((short) s + ": " + opcodes.get(s).getName());
+		Map<String, OperationCode> opcodes = XMLLoader.load(new OperationCodesConfigurationHandler(new HashMap()), path);
+		for (String s : opcodes.keySet()) {
+			System.out.println(s + ": " + opcodes.get(s).getName());
 			System.out.println(opcodes.get(s).getCode());
 		}
 	} catch (SAXException | IOException | ParserConfigurationException e) {
