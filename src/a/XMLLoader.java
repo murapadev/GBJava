@@ -3,8 +3,8 @@ package a;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
@@ -37,7 +37,7 @@ public class XMLLoader {
 			}
 		}
 		
-		return handler.getParsedObject();
+		return  handler.getParsedObject();
 	}
 	
 }

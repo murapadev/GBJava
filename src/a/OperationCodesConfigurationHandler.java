@@ -9,13 +9,13 @@ import java.util.Stack;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
-public class OperationCodesConfigurationHandler extends BaseConfigurationHandler<HashMap<String, OperationCode>> {
+public class OperationCodesConfigurationHandler extends BaseConfigurationHandler<HashMap<Byte, OperationCode>> {
 
 	Stack<OperationCode> stack;
 	private StringBuilder currentCode;
 	private String currentQName;
 	
-	public OperationCodesConfigurationHandler(HashMap<String, OperationCode> entity) {
+	public OperationCodesConfigurationHandler(HashMap<Byte, OperationCode> entity) {
 		super(entity);
 		stack = new Stack<OperationCode>();
 	}
@@ -65,7 +65,7 @@ public class OperationCodesConfigurationHandler extends BaseConfigurationHandler
 			OperationCode current = stack.pop();
 			ReflectionUtils.<OperationCode, String>modifyAttribute(current, "code", this.currentCode.toString());
 			System.out.println(current);
-			this.returnObject.put(current.getName(), current);
+			this.returnObject.put((Byte)current.getOpcode(), current);
 			
 			current = null;
 			this.currentCode = null;

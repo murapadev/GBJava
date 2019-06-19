@@ -6,19 +6,23 @@ import java.util.Map;
 
 import javax.xml.parsers.ParserConfigurationException;
 
+import groovy.util.Eval;
+
 import org.xml.sax.SAXException;
 
 public class OperationCodesParseTest {
 
 	public static void main(String[] args) {
-		
+
 	String path = OperationCodesParseTest.class.getClassLoader().getResource("opcodes.xml").getPath();
-	
+
 	try {
-		Map<String, OperationCode> opcodes = XMLLoader.load(new OperationCodesConfigurationHandler(new HashMap()), path);
-		for (String s : opcodes.keySet()) {
-			System.out.println(s + ": " + opcodes.get(s).getName());
-			System.out.println(opcodes.get(s).getCode());
+		Map<Byte, OperationCode> opcodes = XMLLoader.load(new OperationCodesConfigurationHandler(new HashMap()), path);
+
+		for (byte b : opcodes.keySet()) {
+			System.out.println(b + ": " + opcodes.get(b).getName());
+
+
 		}
 	} catch (SAXException | IOException | ParserConfigurationException e) {
 		// TODO Auto-generated catch block
