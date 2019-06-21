@@ -1,10 +1,5 @@
 package model;
 
-import org.jetbrains.annotations.Contract;
-
-import java.util.HashMap;
-import java.util.Map;
-
 public enum romType {
     ROM_PLAIN((byte)0x00,"ROM_PLAIN"),
     ROM_MBC1((byte)0x01,"ROM_MBC1"),
@@ -31,26 +26,26 @@ public enum romType {
     ROM_POCKET_CAMERA((byte)0x1F,"ROM_POCKET_CAMERA"),
     ROM_BANDAI_TAMA5((byte)0xFD,"ROM_BANDAI_TAMA5"),
     ROM_HUDSON_HUC3((byte)0xFE,"ROM_HUDSON_HUC3"),
-    ROM_HUDSON_HUC1((byte)0xFF,"ROM_HUDSON_HUC1");
+    ROM_HUDSON_HUC1((byte)0xFF,"ROM_HUDSON_HUC1"),
+    ROM_NOT_FOUND((byte)0xF0,"ROM_NOT_FOUND");
 
 
 
     private byte romType;
     private String romString;
 
-    @Contract(pure = true)
     romType(byte romType, String romString) {
         this.romType = romType;
         this.romString = romString;
 
     }
 
-    @Contract(pure = true)
     public byte getRomType(){
         return romType;
     }
-    @Contract(pure = true)
     public String getRomString(){
         return romString;
     }
+
+
 }
