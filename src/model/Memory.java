@@ -44,6 +44,15 @@ public class Memory {
         writeShort(address, value);
     }
 
+    HashMap<Short,MemoryAddress> getMemoryRange(short _b,short _e){
+        HashMap<Short,MemoryAddress> temp = new HashMap<>();
+        if(_b<=_e)
+            for(int i = _b;i<=_e;i++)
+                temp.put((short)i,memoryBank.get(i));
+
+        return temp;
+
+    }
 
 
 }
