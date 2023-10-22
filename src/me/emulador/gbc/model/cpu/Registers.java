@@ -1,135 +1,172 @@
 package me.emulador.gbc.model.cpu;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class Registers {
-    private byte A, F, B, C, D, E, H, L;
-    private short SP, PC;
+    private Map<String, Byte> registers;
 
     public Registers() {
-        A = 0;
-        F = 0;
-        B = 0;
-        C = 0;
-        D = 0;
-        E = 0;
-        H = 0;
-        L = 0;
-        SP = 0;
-        PC = 0;
+        registers = new HashMap<>();
+        registers.put("A", (byte) 0);
+        registers.put("B", (byte) 0);
+        registers.put("C", (byte) 0);
+        registers.put("D", (byte) 0);
+        registers.put("E", (byte) 0);
+        registers.put("F", (byte) 0);
+        registers.put("H", (byte) 0);
+        registers.put("L", (byte) 0);
+        registers.put("P", (byte) 0);
+        registers.put("C", (byte) 0);
+        registers.put("S", (byte) 0);
+        registers.put("P", (byte) 0);
+    }
+
+    public byte getRegister(String register) {
+        if(register.length() != 1) throw new IllegalArgumentException("Register must be a single character");
+        if(!registers.containsKey(register)) throw new IllegalArgumentException("Register must be one of A, B, C, D, E, F, H, L, P, C, S, P");
+        return registers.get(register);
+    }
+
+    public short getRegisterPair(String register) {
+        if(register.length() != 2) throw new IllegalArgumentException("Register must be two characters");
+        if(!registers.containsKey(register.substring(0, 1)) || !registers.containsKey(register.substring(1, 2))) throw new IllegalArgumentException("Register must be one of AF, BC, DE, HL, SP, PC");
+        return (short) ((this.getRegister(register.substring(0, 1)) << 8) + this.getRegister(register.substring(1, 2)));
+    }
+
+    public void setRegister(String register, byte value) {
+        if(register.length() != 1) throw new IllegalArgumentException("Register must be a single character");
+        if(!registers.containsKey(register)) throw new IllegalArgumentException("Register must be one of A, B, C, D, E, F, H, L, P, C, S, P");
+        registers.put(register, value);
+    }
+
+    public void setRegisterPair(String register, short value) {
+        if(register.length() != 2) throw new IllegalArgumentException("Register must be two characters");
+        if(!registers.containsKey(register.substring(0, 1)) || !registers.containsKey(register.substring(1, 2))) throw new IllegalArgumentException("Register must be one of AF, BC, DE, HL, SP, PC");
+        this.setRegister(register.substring(0, 1), (byte) ((value & 0xFF00) >> 8));
+        this.setRegister(register.substring(1, 2), (byte) (value & 0x00FF));
+    }
+
+    public void setA(byte value) {
+        registers.put("A", value);
+    }
+
+    public void setB(byte value) {
+        registers.put("B", value);
+    }
+
+    public void setC(byte value) {
+        registers.put("C", value);
+    }
+
+    public void setD(byte value) {
+        registers.put("D", value);
+    }
+
+    public void setE(byte value) {
+        registers.put("E", value);
+    }
+
+    public void setF(byte value) {
+        registers.put("F", value);
+    }
+
+    public void setH(byte value) {
+        registers.put("H", value);
+    }
+
+    public void setL(byte value) {
+        registers.put("L", value);
+    }
+
+    public void setSP(short value) {
+        this.setRegisterPair("SP", value);
+    }
+
+    public void setPC(short value) {
+        this.setRegisterPair("PC", value);
+    }
+
+    public void setAF(short value) {
+        this.setRegisterPair("AF", value);
+    }
+
+    public void setBC(short value) {
+        this.setRegisterPair("BC", value);
+    }
+
+    public void setDE(short value) {
+        this.setRegisterPair("DE", value);
+    }
+
+    public void setHL(short value) {
+        this.setRegisterPair("HL", value);
     }
 
     public byte getA() {
-        return A;
-    }
-
-    public void setA(byte a) {
-        A = a;
-    }
-
-    public byte getF() {
-        return F;
-    }
-
-    public void setF(byte f) {
-        F = f;
+        return registers.get("A");
     }
 
     public byte getB() {
-        return B;
-    }
-
-    public void setB(byte b) {
-        B = b;
+        return registers.get("B");
     }
 
     public byte getC() {
-        return C;
-    }
-
-    public void setC(byte c) {
-        C = c;
+        return registers.get("C");
     }
 
     public byte getD() {
-        return D;
-    }
-
-    public void setD(byte d) {
-        D = d;
+        return registers.get("D");
     }
 
     public byte getE() {
-        return E;
+        return registers.get("E");
     }
 
-    public void setE(byte e) {
-        E = e;
+    public byte getF() {
+        return registers.get("F");
     }
 
     public byte getH() {
-        return H;
-    }
-
-    public void setH(byte h) {
-        H = h;
+        return registers.get("H");
     }
 
     public byte getL() {
-        return L;
-    }
-
-    public void setL(byte l) {
-        L = l;
-    }
-
-    public short getAF() {
-        return (short) ((A << 8) | F);
-    }
-
-    public void setAF(short af) {
-        A = (byte) (af >> 8);
-        F = (byte) (af & 0xFF);
-    }
-
-    public short getBC() {
-        return (short) ((B << 8) | C);
-    }
-
-    public void setBC(short bc) {
-        B = (byte) (bc >> 8);
-        C = (byte) (bc & 0xFF);
-    }
-
-    public short getDE() {
-        return (short) ((D << 8) | E);
-    }
-
-    public void setDE(short de) {
-        D = (byte) (de >> 8);
-        E = (byte) (de & 0xFF);
-    }
-
-    public short getHL() {
-        return (short) ((H << 8) | L);
-    }
-
-    public void setHL(short hl) {
-        H = (byte) (hl >> 8);
-        L = (byte) (hl & 0xFF);
+        return registers.get("L");
     }
 
     public short getSP() {
-        return SP;
-    }
-
-    public void setSP(short sp) {
-        SP = sp;
+        return this.getRegisterPair("SP");
     }
 
     public short getPC() {
-        return PC;
+        return this.getRegisterPair("PC");
     }
 
-    public void setPC(short pc) {
-        PC = pc;
+    public short getAF() {
+        return this.getRegisterPair("AF");
     }
+
+    public short getBC() {
+        return this.getRegisterPair("BC");
+    }
+
+    public short getDE() {
+        return this.getRegisterPair("DE");
+    }
+
+    public short getHL() {
+        return this.getRegisterPair("HL");
+    }
+
+    public void setFlags(byte value) {
+        this.setF(value);
+    }
+
+    public byte getFlags() {
+        return this.getF();
+    }
+    
+
 }
+

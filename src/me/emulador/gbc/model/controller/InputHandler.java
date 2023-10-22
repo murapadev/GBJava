@@ -1,4 +1,4 @@
-package com.emulador.gbc.controller;
+package me.emulador.gbc.model.controller;
 
 public class InputHandler {
     // Lógica para manejar las entradas del usuario

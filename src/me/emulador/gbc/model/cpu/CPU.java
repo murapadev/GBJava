@@ -1,4 +1,5 @@
 package me.emulador.gbc.model.cpu;
+import me.emulador.gbc.model.memory.Memory;
 
 /**
  * Represents the CPU of the Game Boy Color.
@@ -13,6 +14,12 @@ public class CPU {
         this.registers = new Registers();
         reset();
     }
+
+    public CPU(Memory memory, Registers registers) {
+        this.memory = memory;
+        this.registers = registers;
+    }
+
 
     /**
      * Reset the CPU to its initial state.
@@ -33,8 +40,14 @@ public class CPU {
     /**
      * Execute an instruction.
      */
-    public void executeInstruction() {
+    public void executeInstruction(byte opcode) {
         // Placeholder: Aquí iría la lógica para decodificar y ejecutar una instrucción.
+        // Por ahora, solo se incrementa el PC.
+
+        System.out.println("PC: " + registers.getPC() + " Opcode: " + opcode);
+
+
+        registers.setPC((short) (registers.getPC() + 1));
     }
 
     /**

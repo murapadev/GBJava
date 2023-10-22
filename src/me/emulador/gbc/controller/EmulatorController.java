@@ -1,7 +1,7 @@
-package com.emulador.gbc.controller;
+package me.emulador.gbc.controller;
 
-import com.emulador.gbc.model.GameBoyColor;
-import com.emulador.gbc.view.EmulatorView;
+import me.emulador.gbc.model.GameBoyColor;
+import me.emulador.gbc.view.EmulatorView;
 
 public class EmulatorController {
     private GameBoyColor gbc;
@@ -12,7 +12,11 @@ public class EmulatorController {
         this.view = view;
     }
 
-    public void handleInput(Input input) {
+    public void handleInput() {
         // Procesar las entradas del usuario y actualizar el Modelo y la Vista
+    }
+
+    public void loadRom(String path) {
+        // Cargar el archivo ROM en el Modelo
     }
 }
