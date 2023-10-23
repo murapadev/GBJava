@@ -12,12 +12,15 @@ public class GameBoyColor {
     public GameBoyColor() {
         this.memory = new Memory();
         this.cpu = new CPU(this.memory);
-        
+
     }
-
-
 
     public void executeCycle() {
         // Lógica para ejecutar un ciclo de la CPU, leer memoria, etc.
+    }
+
+    public void insertCartridge(Cartridge cartridge) {
+        this.cartridge = cartridge;
+        this.memory.loadCartridge(cartridge);
     }
 }

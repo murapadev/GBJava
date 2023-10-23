@@ -63,4 +63,9 @@ public class MBC1 extends Cartridge {
             data[index] = value;
         }
     }
+
+    @Override
+    public byte[] getData() {
+        return data;
+    }
 }

@@ -9,4 +9,7 @@ public abstract class Cartridge {
 
     public abstract byte read(int address);
     public abstract void write(int address, byte value);
+    public byte[] getData(){
+        return data;
+    };
 }

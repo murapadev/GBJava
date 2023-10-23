@@ -1,6 +1,7 @@
 package me.emulador.gbc.controller;
 
 import me.emulador.gbc.model.GameBoyColor;
+import me.emulador.gbc.model.cartridge.Cartridge;
 import me.emulador.gbc.view.EmulatorView;
 
 public class EmulatorController {
@@ -18,5 +19,6 @@ public class EmulatorController {
 
     public void loadRom(String path) {
         // Cargar el archivo ROM en el Modelo
+
     }
 }

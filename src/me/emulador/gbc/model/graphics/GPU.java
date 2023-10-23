@@ -1,155 +1,220 @@
 package me.emulador.gbc.model.graphics;
 
+import java.awt.Color;
+
 import me.emulador.gbc.model.cpu.Interruptions;
+import me.emulador.gbc.model.memory.Memory;
 
 public class GPU {
     // Variables relacionadas con la GPU
-    private Screen screen;
-    private Interruptions interrupts;
-    private int[] tileset;
-    private int[] bgMap;
-    private int[] oam;
 
-    private int scanlineCounter;
-    private int mode;
-    private int modeClock;
+    Memory memory;
+    Screen screen;
+    Interruptions interrupts;
+    int modeClock;
+    int mode;
 
-    public GPU(Interruptions interrupts) {
-        screen = new Screen();
-        tileset = new int[384 * 8 * 8];
-        bgMap = new int[32 * 32];
-        oam = new int[40 * 4];
-        scanlineCounter = 0;
-        mode = 0;
-        modeClock = 0;
+    public GPU(Memory memory, Screen screen, Interruptions interrupts) {
+        this.memory = memory;
+        this.screen = screen;
         this.interrupts = interrupts;
+        this.modeClock = 0;
+        this.mode = 0;
     }
 
-    public void renderScanline() {
-        if (scanlineCounter < 144) {
-            // Draw a horizontal line on the screen
-            int[] line = new int[160];
-            for (int i = 0; i < 160; i++) {
-                line[i] = (i % 2 == 0) ? 0xFFFFFF : 0x000000;
-            }
-            screen.drawScanline(line, scanlineCounter);
-        }
-        scanlineCounter++;
-        if (scanlineCounter == 144) {
-            // Vertical blanking period
-            mode = 1;
-            interrupts.vblank();
-
-        } else if (scanlineCounter < 153) {
-            // Non-visible scanlines
-            mode = 2;
-        } else {
-            // Restart scanning modes
-            mode = 0;
-            scanlineCounter = 0;
-        }
-    }
-
-    public void update(int cycles) {
-        modeClock += cycles;
-        switch (mode) {
+    public void step(int cycles) {
+        this.modeClock += cycles;
+        switch (this.mode) {
             case 0:
-                if (modeClock >= 204) {
-                    // Enter scanline mode 2
-                    modeClock = 0;
-                    mode = 2;
-                }
-                break;
-            case 1:
-                if (modeClock >= 456) {
-                    // Enter scanline mode 2
-                    modeClock = 0;
-                    mode = 2;
+                if (this.modeClock >= 204) {
+                    this.modeClock = 0;
+                    this.mode = 2;
+                    this.interrupts.lcdStat();
                 }
                 break;
             case 2:
-                if (modeClock >= 80) {
-                    // Enter scanline mode 3
-                    modeClock = 0;
-                    mode = 3;
+                if (this.modeClock >= 80) {
+                    this.modeClock = 0;
+                    this.mode = 3;
                 }
                 break;
             case 3:
-                if (modeClock >= 172) {
-                    // Enter scanline mode 0
-                    modeClock = 0;
-                    renderScanline();
+                if (this.modeClock >= 172) {
+                    this.modeClock = 0;
+                    this.mode = 0;
+                    this.interrupts.lcdStat();
+                    this.screen.render();
                 }
                 break;
         }
     }
 
-    public void draw() {
-        screen.draw();
+    public void updateGraphics() {
+        if (this.memory.readByte((short) 0xFF40) == 1) {
+            this.step(456);
+        } else {
+            this.mode = 0;
+            this.modeClock = 0;
+            this.screen.clear();
+        }
     }
 
-    public Screen getScreen() {
-        return screen;
+    public void setLCDStatus() {
+        byte status = this.memory.readByte((short) 0xFF41);
+        if ((status & 0x03) == this.mode) {
+            this.memory.writeByte((short) 0xFF41, (byte) (status | 0x04));
+            this.interrupts.lcdStat();
+        } else {
+            this.memory.writeByte((short) 0xFF41, (byte) (status & 0xFC));
+        }
     }
 
-    public int[] getTileset() {
-        return tileset;
+    public void setLCDControl(byte value) {
+        this.memory.writeByte((short) 0xFF40, value);
     }
 
-    public int[] getBgMap() {
-        return bgMap;
+    public void setScrollY(byte value) {
+        this.memory.writeByte((short) 0xFF42, value);
     }
 
-    public int[] getOam() {
-        return oam;
+    public void setScrollX(byte value) {
+        this.memory.writeByte((short) 0xFF43, value);
     }
 
-    public int getScanlineCounter() {
-        return scanlineCounter;
+    public void setLCDCYCoordinate(byte value) {
+        this.memory.writeByte((short) 0xFF44, value);
     }
 
-    public int getMode() {
-        return mode;
+    public void setLCDCompare(byte value) {
+        this.memory.writeByte((short) 0xFF45, value);
     }
 
-    public int getModeClock() {
-        return modeClock;
+    public void setDMA(byte value) {
+        short address = (short) ((value & 0xFF) << 8);
+        for (int i = 0; i < 0xA0; i++) {
+            this.memory.writeByte((short) (0xFE00 + i), this.memory.readByte((short) (address + i)));
+        }
+    }
+
+    public void setBGPalette(byte value) {
+        this.memory.writeByte((short) 0xFF47, value);
+    }
+
+    public void setSpritePalette0(byte value) {
+        this.memory.writeByte((short) 0xFF48, value);
+    }
+
+    public void setSpritePalette1(byte value) {
+        this.memory.writeByte((short) 0xFF49, value);
+    }
+
+    public void setWindowY(byte value) {
+        this.memory.writeByte((short) 0xFF4A, value);
+    }
+
+    public void setWindowX(byte value) {
+        this.memory.writeByte((short) 0xFF4B, value);
+    }
+
+    public byte getLCDStatus() {
+        return this.memory.readByte((short) 0xFF41);
+    }
+
+    public byte getLCDControl() {
+        return this.memory.readByte((short) 0xFF40);
+    }
+
+    public byte getScrollY() {
+        return this.memory.readByte((short) 0xFF42);
+    }
+
+    public byte getScrollX() {
+        return this.memory.readByte((short) 0xFF43);
+    }
+
+    public byte getLCDCYCoordinate() {
+        return this.memory.readByte((short) 0xFF44);
+    }
+
+    public byte getLCDCompare() {
+        return this.memory.readByte((short) 0xFF45);
+    }
+
+    public byte getDMA() {
+        return this.memory.readByte((short) 0xFF46);
+    }
+
+    public byte getBGPalette() {
+        return this.memory.readByte((short) 0xFF47);
+    }
+
+    public byte getSpritePalette0() {
+        return this.memory.readByte((short) 0xFF48);
+    }
+
+    public byte getSpritePalette1() {
+        return this.memory.readByte((short) 0xFF49);
+    }
+
+    public byte getWindowY() {
+        return this.memory.readByte((short) 0xFF4A);
+    }
+
+    public byte getWindowX() {
+        return this.memory.readByte((short) 0xFF4B);
+    }
+
+    public void setPixel(int x, int y, Color color) {
+        this.screen.setPixel(x, y, color);
+    }
+
+    public Color getPixel(int x, int y) {
+        return this.screen.getPixel(x, y);
+    }
+
+    public void setMemory(Memory memory) {
+        this.memory = memory;
     }
 
     public void setScreen(Screen screen) {
         this.screen = screen;
     }
 
-    public void setTileset(int[] tileset) {
-        this.tileset = tileset;
-    }
-
-    public void setBgMap(int[] bgMap) {
-        this.bgMap = bgMap;
-    }
-
-    public void setOam(int[] oam) {
-        this.oam = oam;
-    }
-
-    public void setScanlineCounter(int scanlineCounter) {
-        this.scanlineCounter = scanlineCounter;
-    }
-
-    public void setMode(int mode) {
-        this.mode = mode;
+    public void setInterrupts(Interruptions interrupts) {
+        this.interrupts = interrupts;
     }
 
     public void setModeClock(int modeClock) {
         this.modeClock = modeClock;
     }
 
+    public void setMode(int mode) {
+        this.mode = mode;
+    }
+
+    public Memory getMemory() {
+        return memory;
+    }
+
+    public Screen getScreen() {
+        return screen;
+    }
+
     public Interruptions getInterrupts() {
         return interrupts;
     }
 
-    public void setInterrupts(Interruptions interrupts) {
-        this.interrupts = interrupts;
+    public int getModeClock() {
+        return modeClock;
     }
-    
+
+    public int getMode() {
+        return mode;
+    }
+
+    public void reset() {
+        this.modeClock = 0;
+        this.mode = 0;
+    }
+
 }
