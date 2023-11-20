@@ -1,620 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="ab010ebc-9e77-40ae-afc9-c5e74b868838" name="Default Changelist" comment="" />
-    <ignored path="$PROJECT_DIR$/out/" />
-    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
+    <list default="true" id="0f6e0227-cdd0-44fa-a771-2ac997f414c2" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/controller/ConfigManager.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/controller/EmulatorController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/GameBoyColor.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cartridge/Cartridge.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cartridge/MBC1.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cartridge/MBC2.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/controller/InputHandler.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cpu/CPU.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cpu/Instructions.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cpu/Interruptions.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cpu/Registers.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/graphics/GPU.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/graphics/Screen.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/memory/Memory.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/sound/SoundChannel1.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/sound/SoundChannel2.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/view/ButtonPanel.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/view/EmulatorView.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/view/MenuBar.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="DefaultGradleProjectSettings">
-    <option name="isMigrated" value="true" />
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 1
+}]]></component>
+  <component name="ProjectId" id="2YQ020jf4ZbC1c5ppA6Iqit8msd" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
   </component>
-  <component name="FavoritesManager">
-    <favorites_list name="GBemu" />
-  </component>
-  <component name="FileEditorManager">
-    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/src/model/Rom.java">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="278">
-              <caret line="57" column="16" selection-start-line="57" selection-start-column="16" selection-end-line="57" selection-end-column="16" />
-              <folding>
-                <element signature="imports" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/model/Memory.java">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="765">
-              <caret line="51" selection-start-line="51" selection-end-line="51" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/test/RomTest.java">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="153">
-              <caret line="15" column="23" selection-start-line="15" selection-start-column="23" selection-end-line="15" selection-end-column="23" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-    </leaf>
-  </component>
-  <component name="FileTemplateManagerImpl">
-    <option name="RECENT_TEMPLATES">
-      <list>
-        <option value="AnnotationType" />
-        <option value="Class" />
-        <option value="JUnit5 Test Class" />
-      </list>
-    </option>
-  </component>
-  <component name="Git.Settings">
-    <option name="ROOT_SYNC" value="DONT_SYNC" />
-    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
-  </component>
-  <component name="IdeDocumentHistory">
-    <option name="CHANGED_PATHS">
-      <list>
-        <option value="$PROJECT_DIR$/src/view/Screen.java" />
-        <option value="$PROJECT_DIR$/src/controller/Registers.java" />
-        <option value="$PROJECT_DIR$/src/model/Registers.kt" />
-        <option value="$PROJECT_DIR$/src/model/RegistersTest.groovy" />
-        <option value="$PROJECT_DIR$/src/test/RegistersTest.groovy" />
-        <option value="$PROJECT_DIR$/src/org/junit/jupiter/api/Test.java" />
-        <option value="$PROJECT_DIR$/src/model/ExtendedInstructionsTest.java" />
-        <option value="$PROJECT_DIR$/src/test/ExtendedInstructionsTest.java" />
-        <option value="$PROJECT_DIR$/src/test/RegistersTest.java" />
-        <option value="$PROJECT_DIR$/src/model/MemoryAddress.java" />
-        <option value="$PROJECT_DIR$/src/test/MemoryTest.java" />
-        <option value="$PROJECT_DIR$/src/model/ExtendedInstructions.java" />
-        <option value="$PROJECT_DIR$/src/model/Registers.java" />
-        <option value="$PROJECT_DIR$/src/model/KnowInterrupts.java" />
-        <option value="$PROJECT_DIR$/src/model/Interruptions.java" />
-        <option value="$PROJECT_DIR$/src/model/romType.java" />
-        <option value="$PROJECT_DIR$/src/test/RomTest.java" />
-        <option value="$PROJECT_DIR$/src/model/Memory.java" />
-        <option value="$PROJECT_DIR$/src/model/Rom.java" />
-      </list>
-    </option>
-  </component>
-  <component name="MavenProjectNavigator">
-    <treeState>
-      <expand />
-      <select />
-    </treeState>
-  </component>
-  <component name="ProjectFrameBounds" extendedState="6">
-    <option name="x" value="373" />
-    <option name="width" value="1000" />
-    <option name="height" value="735" />
-  </component>
-  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
-  <component name="ProjectView">
-    <navigator proportions="" version="1">
-      <foldersAlwaysOnTop value="true" />
-    </navigator>
-    <panes>
-      <pane id="ProjectPane">
-        <subPane>
-          <expand>
-            <path>
-              <item name="GBemu" type="b2602c69:ProjectViewProjectNode" />
-              <item name="GBemu" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="GBemu" type="b2602c69:ProjectViewProjectNode" />
-              <item name="GBemu" type="462c0819:PsiDirectoryNode" />
-              <item name=".idea" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="GBemu" type="b2602c69:ProjectViewProjectNode" />
-              <item name="GBemu" type="462c0819:PsiDirectoryNode" />
-              <item name="src" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="GBemu" type="b2602c69:ProjectViewProjectNode" />
-              <item name="GBemu" type="462c0819:PsiDirectoryNode" />
-              <item name="src" type="462c0819:PsiDirectoryNode" />
-              <item name="model" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="GBemu" type="b2602c69:ProjectViewProjectNode" />
-              <item name="GBemu" type="462c0819:PsiDirectoryNode" />
-              <item name="src" type="462c0819:PsiDirectoryNode" />
-              <item name="test" type="462c0819:PsiDirectoryNode" />
-            </path>
-          </expand>
-          <select />
-        </subPane>
-      </pane>
-      <pane id="Scope" />
-      <pane id="PackagesPane" />
-    </panes>
-  </component>
-  <component name="PropertiesComponent">
-    <property name="Downloaded.Files.Path.Enabled" value="false" />
-    <property name="Repository.Attach.Annotations" value="false" />
-    <property name="Repository.Attach.JavaDocs" value="false" />
-    <property name="Repository.Attach.Sources" value="false" />
-    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
-    <property name="com.intellij.testIntegration.createTest.CreateTestDialog.defaultLibrary" value="JUnit5" />
-    <property name="com.intellij.testIntegration.createTest.CreateTestDialog.defaultLibrarySuperClass.Groovy JUnit" value="groovy.util.AllTestSuite" />
-    <property name="com.intellij.testIntegration.createTest.CreateTestDialog.defaultLibrarySuperClass.JUnit5" value="" />
-    <property name="create.test.in.the.same.root" value="true" />
-    <property name="last_opened_file_path" value="C:/Program Files/Git/bin/git.exe" />
-    <property name="project.structure.last.edited" value="Modules" />
-    <property name="project.structure.proportion" value="0.15" />
-    <property name="project.structure.side.proportion" value="0.2" />
-    <property name="settings.editor.selected.configurable" value="vcs.Git" />
-  </component>
-  <component name="RecentsManager">
-    <key name="CreateTestDialog.RecentsKey">
-      <recent name="test" />
-      <recent name="model" />
-    </key>
-    <key name="CreateTestDialog.Recents.Supers">
-      <recent name="" />
-      <recent name="groovy.util.AllTestSuite" />
-      <recent name="groovy.util" />
-    </key>
-    <key name="CreateClassDialog.RecentsKey">
-      <recent name="org.junit.jupiter.api" />
-    </key>
-  </component>
-  <component name="RunDashboard">
-    <option name="ruleStates">
-      <list>
-        <RuleState>
-          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
-        </RuleState>
-        <RuleState>
-          <option name="name" value="StatusDashboardGroupingRule" />
-        </RuleState>
-      </list>
-    </option>
-  </component>
-  <component name="RunManager" selected="JUnit.RomTest.getName">
-    <configuration name="MemoryTest.getMemoryAddress" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
-      <module name="GBemu" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="test.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
-      <option name="PACKAGE_NAME" value="test" />
-      <option name="MAIN_CLASS_NAME" value="test.MemoryTest" />
-      <option name="METHOD_NAME" value="getMemoryAddress" />
-      <option name="TEST_OBJECT" value="method" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="MemoryTest.readByte" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
-      <module name="GBemu" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="test.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
-      <option name="PACKAGE_NAME" value="test" />
-      <option name="MAIN_CLASS_NAME" value="test.MemoryTest" />
-      <option name="METHOD_NAME" value="readByte" />
-      <option name="TEST_OBJECT" value="method" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="MemoryTest.readShort" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
-      <module name="GBemu" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="test.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
-      <option name="PACKAGE_NAME" value="test" />
-      <option name="MAIN_CLASS_NAME" value="test.MemoryTest" />
-      <option name="METHOD_NAME" value="readShort" />
-      <option name="TEST_OBJECT" value="method" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="MemoryTest.readShortFromStack" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
-      <module name="GBemu" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="test.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
-      <option name="PACKAGE_NAME" value="test" />
-      <option name="MAIN_CLASS_NAME" value="test.MemoryTest" />
-      <option name="METHOD_NAME" value="readShortFromStack" />
-      <option name="TEST_OBJECT" value="method" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="RomTest.getName" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
-      <module name="GBemu" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="test.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
-      <option name="PACKAGE_NAME" value="test" />
-      <option name="MAIN_CLASS_NAME" value="test.RomTest" />
-      <option name="METHOD_NAME" value="getName" />
-      <option name="TEST_OBJECT" value="method" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <recent_temporary>
-      <list>
-        <item itemvalue="JUnit.RomTest.getName" />
-        <item itemvalue="JUnit.MemoryTest.readShortFromStack" />
-        <item itemvalue="JUnit.MemoryTest.readShort" />
-        <item itemvalue="JUnit.MemoryTest.readByte" />
-        <item itemvalue="JUnit.MemoryTest.getMemoryAddress" />
-      </list>
-    </recent_temporary>
-  </component>
-  <component name="SvnConfiguration">
-    <configuration />
-  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "git-widget-placeholder": "master",
+    "onboarding.tips.debug.path": "/home/pablo/ProyectosPropios/GBJava/untitled/src/main/java/org/example/Main.java",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="ab010ebc-9e77-40ae-afc9-c5e74b868838" name="Default Changelist" comment="" />
-      <created>1559910494612</created>
+      <changelist id="0f6e0227-cdd0-44fa-a771-2ac997f414c2" name="Changes" comment="" />
+      <created>1700442285478</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1559910494612</updated>
+      <updated>1700442285478</updated>
+      <workItem from="1700442286732" duration="2000" />
     </task>
-    <task id="LOCAL-00001" summary="First Commit Test">
-      <created>1560870194919</created>
-      <option name="number" value="00001" />
-      <option name="presentableId" value="LOCAL-00001" />
-      <option name="project" value="LOCAL" />
-      <updated>1560870194919</updated>
-    </task>
-    <task id="LOCAL-00002" summary="Some working in progress rom, almost ready for testing.">
-      <created>1561130782780</created>
-      <option name="number" value="00002" />
-      <option name="presentableId" value="LOCAL-00002" />
-      <option name="project" value="LOCAL" />
-      <updated>1561130782780</updated>
-    </task>
-    <task id="LOCAL-00003" summary="Some working in progress rom, almost ready for testing.">
-      <created>1563752281775</created>
-      <option name="number" value="00003" />
-      <option name="presentableId" value="LOCAL-00003" />
-      <option name="project" value="LOCAL" />
-      <updated>1563752281775</updated>
-    </task>
-    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
-  <component name="TestHistory">
-    <history-entry file="RomTest_getName - 2019.06.22 at 14h 30m 06s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.22 at 15h 09m 00s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.22 at 15h 15m 38s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.22 at 15h 16m 08s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.22 at 15h 25m 54s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.23 at 12h 51m 16s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.23 at 13h 06m 39s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.23 at 13h 07m 37s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.23 at 13h 10m 35s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-    <history-entry file="RomTest_getName - 2019.06.23 at 13h 11m 15s.xml">
-      <configuration name="RomTest.getName" configurationId="JUnit" />
-    </history-entry>
-  </component>
-  <component name="TodoView">
-    <todo-panel id="selected-file">
-      <is-autoscroll-to-source value="true" />
-    </todo-panel>
-    <todo-panel id="all">
-      <are-packages-shown value="true" />
-      <is-autoscroll-to-source value="true" />
-    </todo-panel>
-  </component>
-  <component name="ToolWindowManager">
-    <frame x="-8" y="-8" width="1382" height="744" extended-state="6" />
-    <layout>
-      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.49746192" visible="true" weight="0.3472012" />
-      <window_info id="Structure" order="1" sideWeight="0.5025381" side_tool="true" weight="0.3184569" />
-      <window_info id="Designer" order="2" />
-      <window_info id="Image Layers" order="3" />
-      <window_info id="Capture Tool" order="4" />
-      <window_info id="UI Designer" order="5" />
-      <window_info id="Learn" order="6" />
-      <window_info id="Favorites" order="7" sideWeight="0.5025381" side_tool="true" weight="0.3184569" />
-      <window_info anchor="bottom" id="Message" order="0" />
-      <window_info anchor="bottom" id="Find" order="1" />
-      <window_info anchor="bottom" id="Run" order="2" sideWeight="0.4969743" weight="0.32993197" />
-      <window_info anchor="bottom" id="Debug" order="3" weight="0.39965987" />
-      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
-      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
-      <window_info anchor="bottom" id="TODO" order="6" weight="0.3289689" />
-      <window_info anchor="bottom" id="Terminal" order="7" sideWeight="0.4969743" weight="0.32993197" />
-      <window_info anchor="bottom" id="Event Log" order="8" sideWeight="0.5030257" side_tool="true" visible="true" weight="0.32993197" />
-      <window_info anchor="bottom" id="Version Control" order="9" sideWeight="0.49848714" weight="0.32993197" />
-      <window_info anchor="bottom" id="Messages" order="10" sideWeight="0.494705" weight="0.32993197" />
-      <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
-      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
-      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
-      <window_info anchor="right" id="Palette" order="3" />
-      <window_info anchor="right" id="Theme Preview" order="4" />
-      <window_info anchor="right" id="Capture Analysis" order="5" />
-      <window_info anchor="right" id="Palette&#9;" order="6" />
-      <window_info anchor="right" id="Maven" order="7" weight="0.32980332" />
-    </layout>
-    <layout-to-restore>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.2549168" />
-      <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info id="Designer" order="2" />
-      <window_info id="Image Layers" order="3" />
-      <window_info id="Capture Tool" order="4" />
-      <window_info id="UI Designer" order="5" />
-      <window_info id="Learn" order="6" />
-      <window_info id="Favorites" order="7" side_tool="true" />
-      <window_info anchor="bottom" id="Message" order="0" />
-      <window_info anchor="bottom" id="Find" order="1" />
-      <window_info anchor="bottom" id="Run" order="2" />
-      <window_info anchor="bottom" id="Debug" order="3" weight="0.4" />
-      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
-      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
-      <window_info anchor="bottom" id="TODO" order="6" weight="0.3289689" />
-      <window_info anchor="bottom" id="Terminal" order="7" />
-      <window_info anchor="bottom" id="Event Log" order="8" side_tool="true" />
-      <window_info anchor="bottom" id="Version Control" order="9" />
-      <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
-      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
-      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
-      <window_info anchor="right" id="Palette" order="3" />
-      <window_info anchor="right" id="Maven" order="4" />
-      <window_info anchor="right" id="Theme Preview" order="5" />
-      <window_info anchor="right" id="Capture Analysis" order="6" />
-      <window_info anchor="right" id="Palette&#9;" order="7" />
-    </layout-to-restore>
-  </component>
-  <component name="VcsManagerConfiguration">
-    <MESSAGE value="First Commit Test" />
-    <MESSAGE value="Some working in progress rom, almost ready for testing." />
-    <option name="LAST_COMMIT_MESSAGE" value="Some working in progress rom, almost ready for testing." />
-  </component>
-  <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/.idea/kotlinc.xml">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="85">
-          <caret line="5" column="10" selection-start-line="5" selection-start-column="10" selection-end-line="5" selection-end-column="10" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/model/RegistersTest.groovy" />
-    <entry file="file://$PROJECT_DIR$/src/test/RegistersTest.groovy" />
-    <entry file="file://$PROJECT_DIR$/src/org/junit/jupiter/api/Test.java" />
-    <entry file="file://$PROJECT_DIR$/src/view/Screen.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="102">
-          <caret line="6" selection-start-line="6" selection-end-line="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/test/ExtendedInstructionsTest.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="221">
-          <caret line="13" column="9" selection-start-line="13" selection-start-column="9" selection-end-line="13" selection-end-column="9" />
-          <folding>
-            <element signature="imports" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/model/KnowInterrupts.java" />
-    <entry file="file://$PROJECT_DIR$/src/model/Registers.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="149">
-          <caret line="132" column="5" selection-start-line="132" selection-start-column="5" selection-end-line="132" selection-end-column="5" />
-          <folding>
-            <element signature="e#2177#2178#0" expanded="true" />
-            <element signature="e#2202#2203#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/test/RegistersTest.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="544">
-          <caret line="33" column="37" selection-start-line="33" selection-start-column="37" selection-end-line="33" selection-end-column="37" />
-          <folding>
-            <element signature="imports" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/test/MemoryTest.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="85">
-          <caret line="10" column="18" selection-start-line="10" selection-start-column="18" selection-end-line="10" selection-end-column="18" />
-          <folding>
-            <element signature="imports" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/model/ExtendedInstructions.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="68">
-          <caret line="4" column="35" selection-start-line="4" selection-start-column="35" selection-end-line="4" selection-end-column="35" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/model/Interruptions.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="221">
-          <caret line="13" column="12" selection-start-line="13" selection-start-column="12" selection-end-line="13" selection-end-column="12" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/model/romType.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="235">
-          <caret line="28" column="30" selection-start-line="28" selection-start-column="30" selection-end-line="28" selection-end-column="30" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/model/MemoryAddress.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="34">
-          <caret line="2" column="13" selection-start-line="2" selection-start-column="13" selection-end-line="2" selection-end-column="13" />
-          <folding>
-            <element signature="e#100#101#0" expanded="true" />
-            <element signature="e#135#136#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/model/Rom.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="278">
-          <caret line="57" column="16" selection-start-line="57" selection-start-column="16" selection-end-line="57" selection-end-column="16" />
-          <folding>
-            <element signature="imports" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/model/Memory.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="765">
-          <caret line="51" selection-start-line="51" selection-end-line="51" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/test/RomTest.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="153">
-          <caret line="15" column="23" selection-start-line="15" selection-start-column="23" selection-end-line="15" selection-end-column="23" />
-        </state>
-      </provider>
-    </entry>
-  </component>
-  <component name="masterDetails">
-    <states>
-      <state key="ArtifactsStructureConfigurable.UI">
-        <settings>
-          <artifact-editor />
-          <splitter-proportions>
-            <option name="proportions">
-              <list>
-                <option value="0.2" />
-              </list>
-            </option>
-          </splitter-proportions>
-        </settings>
-      </state>
-      <state key="FacetStructureConfigurable.UI">
-        <settings>
-          <splitter-proportions>
-            <option name="proportions">
-              <list>
-                <option value="0.2" />
-              </list>
-            </option>
-          </splitter-proportions>
-        </settings>
-      </state>
-      <state key="GlobalLibrariesConfigurable.UI">
-        <settings>
-          <splitter-proportions>
-            <option name="proportions">
-              <list>
-                <option value="0.2" />
-              </list>
-            </option>
-          </splitter-proportions>
-        </settings>
-      </state>
-      <state key="JdkListConfigurable.UI">
-        <settings>
-          <splitter-proportions>
-            <option name="proportions">
-              <list>
-                <option value="0.2" />
-              </list>
-            </option>
-          </splitter-proportions>
-        </settings>
-      </state>
-      <state key="ModuleStructureConfigurable.UI">
-        <settings>
-          <last-edited>GBemu</last-edited>
-          <splitter-proportions>
-            <option name="proportions">
-              <list>
-                <option value="0.2" />
-                <option value="0.6" />
-              </list>
-            </option>
-          </splitter-proportions>
-        </settings>
-      </state>
-      <state key="ProjectJDKs.UI">
-        <settings>
-          <last-edited>JDK_1.8.0</last-edited>
-          <splitter-proportions>
-            <option name="proportions">
-              <list>
-                <option value="0.2" />
-              </list>
-            </option>
-          </splitter-proportions>
-        </settings>
-      </state>
-      <state key="ProjectLibrariesConfigurable.UI">
-        <settings>
-          <splitter-proportions>
-            <option name="proportions">
-              <list>
-                <option value="0.2" />
-              </list>
-            </option>
-          </splitter-proportions>
-        </settings>
-      </state>
-    </states>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/main/java/org/example/Main.java</url>
+          <line>15</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>
