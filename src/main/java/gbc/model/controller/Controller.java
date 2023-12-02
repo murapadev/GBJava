@@ -1,11 +1,11 @@
-package main.java.model.controller;
+package gbc.model.controller;
 
-public class InputHandler {
+public class Controller {
 	private boolean[] keys;
 	private boolean[] keysPressed;
 	private boolean[] keysReleased;
 
-	public InputHandler() {
+	public Controller() {
 		keys = new boolean[8];
 		keysPressed = new boolean[8];
 		keysReleased = new boolean[8];
@@ -18,6 +18,10 @@ public class InputHandler {
 		} else {
 			keysReleased[key] = true;
 		}
+	}
+
+	public void handleInput() {
+		resetKeys();
 	}
 
 	public boolean isKeyPressed(int key) {

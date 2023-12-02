@@ -5,50 +5,153 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0f6e0227-cdd0-44fa-a771-2ac997f414c2" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/controller/ConfigManager.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/controller/EmulatorController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/GameBoyColor.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cartridge/Cartridge.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cartridge/MBC1.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cartridge/MBC2.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/controller/InputHandler.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cpu/CPU.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cpu/Instructions.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cpu/Interruptions.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/cpu/Registers.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/graphics/GPU.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/graphics/Screen.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/memory/Memory.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/sound/SoundChannel1.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/model/sound/SoundChannel2.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/view/ButtonPanel.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/view/EmulatorView.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/me/emulador/gbc/view/MenuBar.java" beforeDir="false" />
+      <change afterPath="$PROJECT_DIR$/Pokemon.gb" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gbc/controller/FileLoader.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/Operation.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main/java/gbc/view/DebugView.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/test/java/gbc/MemoryTest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/test/java/gbc/RegistersTest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/controller/EmulatorController.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/controller/FileLoader.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/GameBoyColor.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cartridge/Cartridge.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cartridge/CartridgeFactory.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cartridge/MBC1.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cartridge/MBC2.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cartridge/MBC3.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cartridge/MBC5.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cartridge/ROM.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/controller/Controller.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cpu/CPU.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cpu/Instructions.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cpu/Interruptions.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cpu/Operation.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/cpu/Registers.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/graphics/GPU.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/graphics/Screen.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/model/memory/Memory.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/view/DebugView.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/view/EmulatorView$1.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/view/EmulatorView.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/gbc/view/MenuBar.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/classes/main.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/test-classes/gbc/MemoryTest.class" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/target/test-classes/gbc/model/cpu/RegistersTest.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/controller/EmulatorController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/controller/EmulatorController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/GameBoyColor.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/GameBoyColor.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/Cartridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/Cartridge.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/CartridgeFactory.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/CartridgeFactory.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/MBC1.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/MBC1.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/MBC2.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/MBC2.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/MBC3.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/MBC3.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/MBC5.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/MBC5.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/ROM.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cartridge/ROM.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/controller/InputHandler.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/controller/Controller.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/CPU.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/CPU.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/Instructions.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/Instructions.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/Interruptions.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/Interruptions.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/Registers.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/cpu/Registers.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/graphics/GPU.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/graphics/GPU.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/graphics/Screen.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/graphics/Screen.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/model/memory/Memory.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/model/memory/Memory.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/view/EmulatorView.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/view/EmulatorView.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/gbc/view/MenuBar.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/gbc/view/MenuBar.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/main.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/main.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/GBJava/AppTest.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/GBJava/RegistersTests.java" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 1
-}]]></component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+        <option value="Interface" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 1
+}</component>
   <component name="ProjectId" id="2YQ020jf4ZbC1c5ppA6Iqit8msd" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "WebServerToolWindowFactoryState": "false",
-    "git-widget-placeholder": "master",
-    "onboarding.tips.debug.path": "/home/pablo/ProyectosPropios/GBJava/untitled/src/main/java/org/example/Main.java",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/pablo/ProyectosPropios/GBJava&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;onboarding.tips.debug.path&quot;: &quot;/home/pablo/ProyectosPropios/GBJava/untitled/src/main/java/org/example/Main.java&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/test/java/gbc" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Application.main">
+    <configuration name="main" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="main" />
+      <module name="GBJava" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="MemoryTest.testReadAndWriteChar" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="GBJava" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="gbc.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <option name="PACKAGE_NAME" value="gbc" />
+      <option name="MAIN_CLASS_NAME" value="gbc.MemoryTest" />
+      <option name="METHOD_NAME" value="testReadAndWriteChar" />
+      <option name="TEST_OBJECT" value="method" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Application.main" />
+        <item itemvalue="JUnit.MemoryTest.testReadAndWriteChar" />
+      </list>
+    </recent_temporary>
+  </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
@@ -58,8 +161,24 @@
       <option name="presentableId" value="Default" />
       <updated>1700442285478</updated>
       <workItem from="1700442286732" duration="2000" />
+      <workItem from="1700442451763" duration="1502000" />
+      <workItem from="1700444441895" duration="392000" />
+      <workItem from="1700444839555" duration="6857000" />
+      <workItem from="1701139711788" duration="5524000" />
+      <workItem from="1701161214023" duration="441000" />
+      <workItem from="1701222900368" duration="5443000" />
+      <workItem from="1701274497525" duration="3085000" />
+      <workItem from="1701293339645" duration="2405000" />
     </task>
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <ignored-roots>
+      <path value="$PROJECT_DIR$/.." />
+    </ignored-roots>
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -71,5 +190,9 @@
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
   </component>
 </project>

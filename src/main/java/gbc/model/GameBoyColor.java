@@ -1,29 +1,34 @@
-package main.java.model;
+package gbc.model;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
-import main.java.model.cartridge.*;
-import main.java.model.cpu.*;
-import main.java.model.memory.*;
-import main.java.view.EmulatorView;
-import main.java.model.graphics.*;
+import gbc.model.cartridge.*;
+import gbc.model.controller.Controller;
+import gbc.model.cpu.*;
+import gbc.model.memory.*;
+import gbc.view.EmulatorView;
+import gbc.model.graphics.*;
 
 public class GameBoyColor {
-	private CPU cpu;
-	private Memory memory;
-	private Cartridge cartridge;
+	private final CPU cpu;
+	private final Memory memory;
 	private GPU gpu;
+
+	private Controller input;
 
 	public GameBoyColor() {
 		this.memory = new Memory();
 		this.cpu = new CPU(this.memory);
 		this.gpu = new GPU(this.memory, this.cpu);
+		this.input = new Controller();
 
 	}
 
 	public void executeCycle() {
+
+		input.handleInput();
 		cpu.executeCycle();
 		gpu.step(cpu.getCycles());
 		cpu.setCycles(0);
@@ -36,7 +41,7 @@ public class GameBoyColor {
 		byte[] data;
 		try {
 			data = Files.readAllBytes(Paths.get(path));
-			cartridge = CartridgeFactory.create(data);
+			Cartridge cartridge = CartridgeFactory.create(data);
 			memory.loadCartridge(cartridge);
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -50,6 +55,19 @@ public class GameBoyColor {
 		gpu = new GPU(this.memory, this.cpu);
 		
 	}
+
+	public Controller getController() {
+		return this.input;
+	}
+
+	public CPU getCpu() {
+		return this.cpu;
+	}
+
+	public Memory getMemory() {
+		return this.memory;
+	}
+
 
 	public GPU getGpu() {
 		return this.gpu;

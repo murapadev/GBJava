@@ -1,28 +1,30 @@
-package main.java.controller;
+package gbc.controller;
 
-import main.java.model.GameBoyColor;
-import main.java.view.EmulatorView;
-import main.java.view.MenuBar;
+import gbc.model.GameBoyColor;
+import gbc.view.DebugView;
+import gbc.view.EmulatorView;
+import gbc.view.MenuBar;
 
 public class EmulatorController {
 	private GameBoyColor gbc;
 	private EmulatorView view;
-	private MenuBar menuBar;
+
 
 	public EmulatorController(GameBoyColor gbc, EmulatorView view) {
 		this.gbc = gbc;
 		this.view = view;
-		this.menuBar = new MenuBar();
 	}
 
 	public EmulatorController() {
 		this.gbc = new GameBoyColor();
-		this.view = new EmulatorView(this.gbc.getGpu().getScreen());
+		this.view = new EmulatorView(this.gbc);
+
 	}
+
 
 	public void start() {
 		// Init view
-		view.init();
+		view.update();
 
 
 		// Main loop
@@ -33,7 +35,9 @@ public class EmulatorController {
 			gbc.executeCycle();
 			// Update view
 			view.update();
-			
+
+			// Update debug view
+
 		}
 
 	}

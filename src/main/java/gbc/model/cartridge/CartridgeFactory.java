@@ -1,24 +1,18 @@
-package main.java.model.cartridge;
+package gbc.model.cartridge;
 
 public class CartridgeFactory {
 
 	public static Cartridge create(byte[] data) {
-		
-		if (data[0x147] == 0x00) {
-			return new ROM(data);
-		} else if (data[0x147] == 0x01 || data[0x147] == 0x02 || data[0x147] == 0x03) {
-			return new MBC1(data);
-		} else if (data[0x147] == 0x05 || data[0x147] == 0x06) {
-			return new MBC2(data);
-		} else if (data[0x147] == 0x0F || data[0x147] == 0x10 || data[0x147] == 0x11 || data[0x147] == 0x12
-				|| data[0x147] == 0x13) {
-			return new MBC3(data);
-		} else if (data[0x147] == 0x19 || data[0x147] == 0x1A || data[0x147] == 0x1B || data[0x147] == 0x1C
-				|| data[0x147] == 0x1D || data[0x147] == 0x1E) {
-			return new MBC5(data);
-		} else {
-			return null;
-		}
+		byte value = data[0x147];
+		System.out.println("CartridgeFactory: " + value);
+        return switch (value) {
+            case 0x00 -> new ROM(data);
+            case 0x01, 0x02, 0x03 -> new MBC1(data);
+            case 0x05, 0x06 -> new MBC2(data);
+            case 0x0F, 0x10, 0x11, 0x12, 0x13 -> new MBC3(data);
+            case 0x19, 0x1A, 0x1B, 0x1C, 0x1D -> new MBC5(data);
+            default -> null;
+        };
 	}
 
 }

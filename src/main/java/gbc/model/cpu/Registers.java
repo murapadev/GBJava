@@ -1,172 +1,115 @@
-package main.java.model.cpu;
-
-import java.util.HashMap;
-import java.util.Map;
+package gbc.model.cpu;
 
 public class Registers {
-    private Map<String, Byte> registers;
+	private byte A, B, C, D, E, F, H, L;
+	private char PC, SP;
 
-    public Registers() {
-        registers = new HashMap<>();
-        registers.put("A", (byte) 0);
-        registers.put("B", (byte) 0);
-        registers.put("C", (byte) 0);
-        registers.put("D", (byte) 0);
-        registers.put("E", (byte) 0);
-        registers.put("F", (byte) 0);
-        registers.put("H", (byte) 0);
-        registers.put("L", (byte) 0);
-        registers.put("P", (byte) 0);
-        registers.put("C", (byte) 0);
-        registers.put("S", (byte) 0);
-        registers.put("P", (byte) 0);
-    }
+	public Registers() {
+		A = B = C = D = E = F = H = L = 0;
+		PC = SP = 0;
+	}
 
-    public byte getRegister(String register) {
-        if(register.length() != 1) throw new IllegalArgumentException("Register must be a single character");
-        if(!registers.containsKey(register)) throw new IllegalArgumentException("Register must be one of A, B, C, D, E, F, H, L, P, C, S, P");
-        return registers.get(register);
-    }
+	public byte getRegister(String register) {
+		return switch (register) {
+			case "A" -> A;
+			case "B" -> B;
+			case "C" -> C;
+			case "D" -> D;
+			case "E" -> E;
+			case "F" -> F;
+			case "H" -> H;
+			case "L" -> L;
+			case "AF" -> (byte) ((A << 8) | (F & 0xFF));
+			case "BC" -> (byte) ((B << 8) | (C & 0xFF));
+			case "DE" -> (byte) ((D << 8) | (E & 0xFF));
+			case "HL" -> (byte) ((H << 8) | (L & 0xFF));
 
-    public short getRegisterPair(String register) {
-        if(register.length() != 2) throw new IllegalArgumentException("Register must be two characters");
-        if(!registers.containsKey(register.substring(0, 1)) || !registers.containsKey(register.substring(1, 2))) throw new IllegalArgumentException("Register must be one of AF, BC, DE, HL, SP, PC");
-        return (short) ((this.getRegister(register.substring(0, 1)) << 8) + this.getRegister(register.substring(1, 2)));
-    }
+			default -> throw new IllegalArgumentException("Invalid register: " + register);
+		};
+	}
 
-    public void setRegister(String register, byte value) {
-        if(register.length() != 1) throw new IllegalArgumentException("Register must be a single character");
-        if(!registers.containsKey(register)) throw new IllegalArgumentException("Register must be one of A, B, C, D, E, F, H, L, P, C, S, P");
-        registers.put(register, value);
-    }
+	public void setRegister(String register, byte value) {
+		switch (register) {
+			case "A" -> A = value;
+			case "B" -> B = value;
+			case "C" -> C = value;
+			case "D" -> D = value;
+			case "E" -> E = value;
+			case "F" -> F = value;
+			case "H" -> H = value;
+			case "L" -> L = value;
+			case "AF" -> setAF((char) ((value << 8) | (F & 0xFF)));
+			case "BC" -> setBC((char) ((B << 8) | (value & 0xFF)));
+			case "DE" -> setDE((char) ((D << 8) | (value & 0xFF)));
+			case "HL" -> setHL((char) ((H << 8) | (value & 0xFF)));
+			default -> throw new IllegalArgumentException("Invalid register: " + register);
+		}
+	}
 
-    public void setRegisterPair(String register, short value) {
-        if(register.length() != 2) throw new IllegalArgumentException("Register must be two characters");
-        if(!registers.containsKey(register.substring(0, 1)) || !registers.containsKey(register.substring(1, 2))) throw new IllegalArgumentException("Register must be one of AF, BC, DE, HL, SP, PC");
-        this.setRegister(register.substring(0, 1), (byte) ((value & 0xFF00) >> 8));
-        this.setRegister(register.substring(1, 2), (byte) (value & 0x00FF));
-    }
+	public char getPC() {
+		return PC;
+	}
 
-    public void setA(byte value) {
-        registers.put("A", value);
-    }
+	public void setPC(char value) {
+		PC = value;
+	}
 
-    public void setB(byte value) {
-        registers.put("B", value);
-    }
+	public char getSP() {
+		return SP;
+	}
 
-    public void setC(byte value) {
-        registers.put("C", value);
-    }
+	public void setSP(char value) {
+		SP = value;
+	}
 
-    public void setD(byte value) {
-        registers.put("D", value);
-    }
+	public char getAF() {
+		return (char) ((A << 8) | (F & 0xFF));
+	}
 
-    public void setE(byte value) {
-        registers.put("E", value);
-    }
+	public void setAF(char value) {
+		A = (byte) ((value >> 8) & 0xFF);
+		F = (byte) (value & 0xFF);
+	}
 
-    public void setF(byte value) {
-        registers.put("F", value);
-    }
+	public char getBC() {
+		return (char) ((B << 8) | (C & 0xFF));
+	}
 
-    public void setH(byte value) {
-        registers.put("H", value);
-    }
+	public void setBC(char value) {
+		B = (byte) ((value >> 8) & 0xFF);
+		C = (byte) (value & 0xFF);
+	}
 
-    public void setL(byte value) {
-        registers.put("L", value);
-    }
+	public char getDE() {
+		return (char) ((D << 8) | (E & 0xFF));
+	}
 
-    public void setSP(short value) {
-        this.setRegisterPair("SP", value);
-    }
+	public void setDE(char value) {
+		D = (byte) ((value >> 8) & 0xFF);
+		E = (byte) (value & 0xFF);
+	}
 
-    public void setPC(short value) {
-        this.setRegisterPair("PC", value);
-    }
+	public char getHL() {
+		return (char) ((H << 8) | (L & 0xFF));
+	}
 
-    public void setAF(short value) {
-        this.setRegisterPair("AF", value);
-    }
+	public void setHL(char value) {
+		H = (byte) ((value >> 8) & 0xFF);
+		L = (byte) (value & 0xFF);
+	}
 
-    public void setBC(short value) {
-        this.setRegisterPair("BC", value);
-    }
+	public void reset() {
+		A = B = C = D = E = F = H = L = 0;
+		PC = SP = 0;
+	}
 
-    public void setDE(short value) {
-        this.setRegisterPair("DE", value);
-    }
+	public void incrementPC() {
+		PC++;
+	}
 
-    public void setHL(short value) {
-        this.setRegisterPair("HL", value);
-    }
-
-    public byte getA() {
-        return registers.get("A");
-    }
-
-    public byte getB() {
-        return registers.get("B");
-    }
-
-    public byte getC() {
-        return registers.get("C");
-    }
-
-    public byte getD() {
-        return registers.get("D");
-    }
-
-    public byte getE() {
-        return registers.get("E");
-    }
-
-    public byte getF() {
-        return registers.get("F");
-    }
-
-    public byte getH() {
-        return registers.get("H");
-    }
-
-    public byte getL() {
-        return registers.get("L");
-    }
-
-    public short getSP() {
-        return this.getRegisterPair("SP");
-    }
-
-    public short getPC() {
-        return this.getRegisterPair("PC");
-    }
-
-    public short getAF() {
-        return this.getRegisterPair("AF");
-    }
-
-    public short getBC() {
-        return this.getRegisterPair("BC");
-    }
-
-    public short getDE() {
-        return this.getRegisterPair("DE");
-    }
-
-    public short getHL() {
-        return this.getRegisterPair("HL");
-    }
-
-    public void setFlags(byte value) {
-        this.setF(value);
-    }
-
-    public byte getFlags() {
-        return this.getF();
-    }
-    
-
+	@Override
+	public String toString() {
+		return "A: " + A + "\n" + "B: " + B + "\n" + "C: " + C + "\n" + "D: " + D + "\n" + "E: " + E + "\n" + "F: " + F
+				+ "\n" + "H: " + H + "\n" + "L: " + L + "\n" + "PC: " + PC + "\n" + "SP: " + SP + "\n";
+	}
 }
-

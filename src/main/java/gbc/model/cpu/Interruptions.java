@@ -1,5 +1,5 @@
-package main.java.model.cpu;
-import main.java.model.memory.Memory;
+package gbc.model.cpu;
+import gbc.model.memory.Memory;
 
 public class Interruptions {
     private byte master;
@@ -18,8 +18,8 @@ public class Interruptions {
     public Interruptions(Memory memory, Registers registers) {
         m = memory;
         r = registers;
-        enable = m.readByte((short) 0xFFFF);
-        flags = m.readByte((short) 0xFF0F);
+        enable = m.readByte((char) 0xFFFF);
+        flags = m.readByte((char) 0xFF0F);
         master = (byte) 1;
 
     }
@@ -59,7 +59,7 @@ public class Interruptions {
     public void vblank() {
         if ((flags & Ivblank) != 0) {
             master = 0;
-            r.setPC((short) 0x40);
+            r.setPC((char) 0x40);
             flags &= ~Ivblank;
         }
     }
@@ -67,7 +67,7 @@ public class Interruptions {
     public void lcdStat() {
         if ((flags & Ilcdstat) != 0) {
             master = 0;
-            r.setPC((short) 0x48);
+            r.setPC((char) 0x48);
             flags &= ~Ilcdstat;
         }
     }
@@ -75,7 +75,7 @@ public class Interruptions {
     public void timer() {
         if ((flags & Itimer) != 0) {
             master = 0;
-            r.setPC((short) 0x50);
+            r.setPC((char) 0x50);
             flags &= ~Itimer;
         }
     }
@@ -83,7 +83,7 @@ public class Interruptions {
     public void serial() {
         if ((flags & Iserial) != 0) {
             master = 0;
-            r.setPC((short) 0x58);
+            r.setPC((char) 0x58);
             flags &= ~Iserial;
         }
     }
@@ -91,7 +91,7 @@ public class Interruptions {
     public void joypad() {
         if ((flags & Ijoypad) != 0) {
             master = 0;
-            r.setPC((short) 0x60);
+            r.setPC((char) 0x60);
             flags &= ~Ijoypad;
         }
     }

@@ -1,27 +1,22 @@
-package main.java.model.cartridge;
+package gbc.model.cartridge;
 
 public class ROM extends Cartridge {
 
 	public ROM(byte[] data) {
 		super(data);
-		System.out.println("ROM");
 	}
 
 	@Override
 	public byte read(int address) {
-		System.out.println("ROM read " + address);
-		if(address < 0x8000) {
-			System.out.println("ROM read " + address + " " + data[address]);
+		// Simple direct mapping for ROM-only cartridges
+		if (address >= 0 && address < data.length) {
 			return data[address];
-		} else {
-			return 0;
 		}
-
+		return 0;
 	}
 
 	@Override
 	public void write(int address, byte value) {
-		// TODO Auto-generated method stub
+		// ROM is read-only; writes have no effect
 	}
-
 }

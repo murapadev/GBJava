@@ -1,60 +1,66 @@
-package main.java.view;
+package gbc.view;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
-import java.awt.Graphics;
+import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
-import main.java.model.graphics.Screen;
+import java.io.Serial;
+
+import gbc.model.GameBoyColor;
+import gbc.model.graphics.Screen;
+import gbc.model.graphics.GPU;
 
 public class EmulatorView extends JFrame {
-	
+
+	@Serial
 	private static final long serialVersionUID = 1L;
-	private JPanel contentPane;
+	private final JPanel contentPane;
+	private final GameBoyColor gbc;
+
+	private GPU gpu;
 	private Screen screen;
 
-	public EmulatorView(Screen screen) {
-		this.screen = screen;
+	public EmulatorView(GameBoyColor gbc) {
+		this.gpu = gbc.getGpu();
+		this.gbc = gbc;
+		this.screen = gpu.getScreen();
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		this.setBounds(0, 0, 160, 144);
+		this.setBounds(100, 100, 320, 288); // Scaled size for better visibility
 		this.contentPane = new JPanel() {
+			@Serial
 			private static final long serialVersionUID = 1L;
 
 			@Override
 			public void paintComponent(Graphics g) {
 				super.paintComponent(g);
-				g.drawImage(screen.getImage(), 0, 0, null);
+				BufferedImage image = screen.getImage();
+				if (image != null) {
+					g.drawImage(image, 0, 0, this.getWidth(), this.getHeight(), null);
+				}
 			}
 		};
-		this.contentPane.setBounds(0, 0, 160, 144);
-		this.contentPane.setLayout(null);
-		this.contentPane.setOpaque(true);
+		this.contentPane.setPreferredSize(new Dimension(320, 288)); // Scaled size
 		this.setContentPane(this.contentPane);
+		this.pack();
 		this.setVisible(true);
-	}
+		this.setResizable(false);
 
-	public void init() {
-		this.contentPane.repaint();
+		// Create an instance of MenuBar and set it as the menu bar for this JFrame
+		MenuBar menuBar = new MenuBar(this.gbc.getCpu(), this.gbc.getMemory());
+		this.setJMenuBar(menuBar);
 	}
 
 	public void update() {
+		this.gpu.updateGraphics();
 		this.contentPane.repaint();
 	}
 
-	public void setScreen(Screen screen) {
-		this.screen = screen;
+	public void setGPU(GPU gpu) {
+		this.gpu = gpu;
+		this.screen = gpu.getScreen();
 	}
 
-	public Screen getScreen() {
-		return this.screen;
+	public GPU getGPU() {
+		return this.gpu;
 	}
-
-	public BufferedImage getImage() {
-		return this.screen.getImage();
-	}
-
-	public byte[] getPixels() {
-		return ((DataBufferByte) this.getImage().getRaster().getDataBuffer()).getData();
-	}
-
 }
