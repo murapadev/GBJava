@@ -16,12 +16,15 @@ public class GameBoyColor {
 	private final Memory memory;
 	private GPU gpu;
 
+	private Screen screen;
+
 	private Controller input;
 
 	public GameBoyColor() {
 		this.memory = new Memory();
 		this.cpu = new CPU(this.memory);
-		this.gpu = new GPU(this.memory, this.cpu);
+		this.screen = new Screen();
+		this.gpu = new GPU(this.memory, this.screen);
 		this.input = new Controller();
 
 	}
@@ -32,9 +35,6 @@ public class GameBoyColor {
 		cpu.executeCycle();
 		gpu.step(cpu.getCycles());
 		cpu.setCycles(0);
-
-
-
 	}
 
 	public void insertCartridge(String path) {
@@ -52,7 +52,8 @@ public class GameBoyColor {
 	public void reset() {
 		cpu.reset();
 		memory.reset();
-		gpu = new GPU(this.memory, this.cpu);
+		this.screen = new Screen();
+		gpu = new GPU(this.memory, this.screen);
 		
 	}
 

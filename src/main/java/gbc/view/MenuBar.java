@@ -1,21 +1,29 @@
 package gbc.view;
 
+import gbc.model.GameBoyColor;
 import gbc.model.cpu.CPU;
 import gbc.model.memory.Memory;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.event.ActionEvent;
 import java.io.File;
-import javax.swing.filechooser.FileNameExtensionFilter;
+import java.io.IOException;
 
 public class MenuBar extends JMenuBar {
-	// Assume that CPU and Memory are already instantiated and passed to the constructor
+
+	private final GameBoyColor gbc;
 	private CPU cpu;
 	private Memory memory;
 
-	public MenuBar(CPU cpu, Memory memory) {
-		this.cpu = cpu;
-		this.memory = memory;
+	private final DebugView debugView;
+
+	public MenuBar(GameBoyColor gbc, DebugView debugView) {
+		this.gbc = gbc;
+		this.cpu = gbc.getCpu();
+		this.memory = gbc.getMemory();
+		this.debugView = debugView;
+
 
 		JMenu fileMenu = new JMenu("File");
 		JMenuItem openItem = new JMenuItem("Open");
@@ -27,14 +35,16 @@ public class MenuBar extends JMenuBar {
 		fileMenu.addSeparator();
 		fileMenu.add(exitItem);
 
-		openItem.addActionListener(e -> openFile());
-		debugItem.addActionListener(e -> openDebugView());
-		exitItem.addActionListener(e -> System.exit(0));
+		openItem.addActionListener(this::openFile);
+		debugItem.addActionListener(this::openDebugView);
+		exitItem.addActionListener(e -> closeApplication(
+				new ActionEvent(this, ActionEvent.ACTION_PERFORMED, null)
+		));
 
 		this.add(fileMenu);
 	}
 
-	private void openFile() {
+	private void openFile(ActionEvent e) {
 		JFileChooser fileChooser = new JFileChooser();
 		fileChooser.setDialogTitle("Open ROM File");
 		fileChooser.setAcceptAllFileFilterUsed(false);
@@ -44,19 +54,29 @@ public class MenuBar extends JMenuBar {
 		int result = fileChooser.showOpenDialog(this);
 		if (result == JFileChooser.APPROVE_OPTION) {
 			File selectedFile = fileChooser.getSelectedFile();
-			loadROM(selectedFile);
+			try {
+				loadROM(selectedFile);
+			} catch (IOException ex) {
+				// Handle exception
+				ex.printStackTrace();
+			}
 		}
 	}
 
-	private void loadROM(File file) {
+	private void loadROM(File file) throws IOException {
 		// Implement the logic to load and start the ROM
 		System.out.println("Loading ROM: " + file.getAbsolutePath());
 		// You might need to call a method from your emulator core here
+		this.gbc.insertCartridge(file.getAbsolutePath());
 	}
 
-	private void openDebugView() {
-		// Assuming DebugView is a class that takes CPU and Memory in its constructor
-		DebugView debugView = new DebugView(cpu, memory);
+	private void openDebugView(ActionEvent e) {
 		debugView.setVisible(true);
+
+	}
+
+	private void closeApplication(ActionEvent e) {
+		// Assuming that this class is an inner class of a JFrame subclass
+		SwingUtilities.getWindowAncestor(this).dispose();
 	}
 }

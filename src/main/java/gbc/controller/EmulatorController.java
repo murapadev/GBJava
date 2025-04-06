@@ -1,23 +1,21 @@
 package gbc.controller;
 
 import gbc.model.GameBoyColor;
-import gbc.view.DebugView;
-import gbc.view.EmulatorView;
-import gbc.view.MenuBar;
+import gbc.view.EmulatorWindow;
 
 public class EmulatorController {
 	private GameBoyColor gbc;
-	private EmulatorView view;
+	private EmulatorWindow view;
 
 
-	public EmulatorController(GameBoyColor gbc, EmulatorView view) {
+	public EmulatorController(GameBoyColor gbc, EmulatorWindow view) {
 		this.gbc = gbc;
 		this.view = view;
 	}
 
 	public EmulatorController() {
 		this.gbc = new GameBoyColor();
-		this.view = new EmulatorView(this.gbc);
+		this.view = new EmulatorWindow(this.gbc);
 
 	}
 

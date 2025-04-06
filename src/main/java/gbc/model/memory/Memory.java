@@ -1,59 +1,46 @@
 package gbc.model.memory;
 
-import java.util.HashMap;
-
 import gbc.model.cartridge.Cartridge;
 
 public class Memory {
-    private final HashMap<Integer, Byte> memoryBank = new HashMap<>();
+    private final byte[] memoryBank = new byte[0x10000]; // 65,536 bytes for the entire addressable range
     private Cartridge cartridge;
 
     public Memory() {
-        for (int i = 0x0000; i <= 0xFFFF; i++) {
-            memoryBank.put(i, (byte) 0x00);
-        }
+        reset();
     }
 
-    public byte readByte(int address) {
+    public int readByte(int address) {
         if (address >= 0x0000 && address < 0x8000) {
-            return cartridge.read(address);
+            return cartridge.read(address) & 0xFF; // Ensure unsigned byte
         } else if (address >= 0x8000 && address <= 0xFFFF) {
-            return memoryBank.get(address);
-        }
-        throw new IllegalArgumentException("Invalid address: " + address);
-    }
-
-    public char readChar(int address) {
-        int high = readByte(address + 1) & 0xFF;
-        int low = readByte(address) & 0xFF;
-        return (char) ((high << 8) | low);
-    }
-
-    public void writeByte(int address, byte value) {
-        if (address >= 0x0000 && address < 0x8000) {
-            cartridge.write(address, value);
-        } else if (address >= 0x8000 && address <= 0xFFFF) {
-            memoryBank.put(address, value);
+            return memoryBank[address] & 0xFF; // Ensure unsigned byte
         } else {
             throw new IllegalArgumentException("Invalid address: " + address);
         }
     }
 
-    public void writeChar(int address, char value) {
-        writeByte(address, (byte) (value & 0xFF));
-        writeByte(address + 1, (byte) ((value >> 8) & 0xFF));
+    public int readChar(int address) {
+        int high = readByte(address + 1);
+        int low = readByte(address);
+        return (high << 8) | low;
     }
 
-    public HashMap<Integer, Byte> getMemoryRange(int startAddress, int endAddress) {
-        if (startAddress > endAddress) {
-            throw new IllegalArgumentException("Start address must be less than or equal to end address");
-        }
+    public void writeByte(int address, int value) {
+        byte byteValue = (byte) (value & 0xFF); // Ensure we store as byte
 
-        HashMap<Integer, Byte> temp = new HashMap<>();
-        for (int i = startAddress; i <= endAddress; i++) {
-            temp.put(i, memoryBank.get(i));
+        if (address >= 0x0000 && address < 0x8000) {
+            cartridge.write(address, byteValue);
+        } else if (address >= 0x8000 && address <= 0xFFFF) {
+            memoryBank[address] = byteValue;
+        } else {
+            throw new IllegalArgumentException("Invalid address: " + address);
         }
-        return temp;
+    }
+
+    public void writeChar(int address, int value) {
+        writeByte(address, value & 0xFF);
+        writeByte(address + 1, (value >> 8) & 0xFF);
     }
 
     public void loadCartridge(Cartridge cartridge) {
@@ -61,40 +48,10 @@ public class Memory {
     }
 
     public void reset() {
-        for (int i = 0x8000; i <= 0xFFFF; i++) {
-            memoryBank.put(i, (byte) 0x00);
+        for (int i = 0; i < memoryBank.length; i++) {
+            memoryBank[i] = 0x00;
         }
-        this.writeByte((char) 0xFF05, (byte) 0x00);
-        this.writeByte((char) 0xFF06, (byte) 0x00);
-        this.writeByte((char) 0xFF07, (byte) 0x00);
-        this.writeByte((char) 0xFF10, (byte) 0x80);
-        this.writeByte((char) 0xFF11, (byte) 0xBF);
-        this.writeByte((char) 0xFF12, (byte) 0xF3);
-        this.writeByte((char) 0xFF14, (byte) 0xBF);
-        this.writeByte((char) 0xFF16, (byte) 0x3F);
-        this.writeByte((char) 0xFF17, (byte) 0x00);
-        this.writeByte((char) 0xFF19, (byte) 0xBF);
-        this.writeByte((char) 0xFF1A, (byte) 0x7F);
-        this.writeByte((char) 0xFF1B, (byte) 0xFF);
-        this.writeByte((char) 0xFF1C, (byte) 0x9F);
-        this.writeByte((char) 0xFF1E, (byte) 0xBF);
-        this.writeByte((char) 0xFF20, (byte) 0xFF);
-        this.writeByte((char) 0xFF21, (byte) 0x00);
-        this.writeByte((char) 0xFF22, (byte) 0x00);
-        this.writeByte((char) 0xFF23, (byte) 0xBF);
-        this.writeByte((char) 0xFF24, (byte) 0x77);
-        this.writeByte((char) 0xFF25, (byte) 0xF3);
-        this.writeByte((char) 0xFF26, (byte) 0xF1);
-        this.writeByte((char) 0xFF40, (byte) 0x91);
-        this.writeByte((char) 0xFF42, (byte) 0x00);
-        this.writeByte((char) 0xFF43, (byte) 0x00);
-        this.writeByte((char) 0xFF45, (byte) 0x00);
-        this.writeByte((char) 0xFF47, (byte) 0xFC);
-        this.writeByte((char) 0xFF48, (byte) 0xFF);
-        this.writeByte((char) 0xFF49, (byte) 0xFF);
-        this.writeByte((char) 0xFF4A, (byte) 0x00);
-        this.writeByte((char) 0xFF4B, (byte) 0x00);
-        this.writeByte((char) 0xFFFF, (byte) 0x00);
+        // Initialize other registers as required
     }
 
     @Override
@@ -108,18 +65,18 @@ public class Memory {
         // Separator
         sb.append("------------------------------------------------------\n");
 
-        for (int i = 0x0000; i <= 0xFFFF; i += 3) {
-            for (int j = 0; j < 3; j++) {
+        for (int i = 0; i < memoryBank.length; i += 16) {
+            for (int j = 0; j < 16; j++) {
                 int address = i + j;
-                if (address <= 0xFFFF) {
-                    // Address Columnx
+                if (address < memoryBank.length) {
+                    // Address Column
                     sb.append(String.format("%04X", address));
 
                     // Value Column
-                    sb.append(String.format(" | %02X ", readByte(address)));
+                    sb.append(String.format(" | %02X ", memoryBank[address]));
 
                     // Separator for next column set or end of line
-                    if (j < 2) {
+                    if (j % 5 == 4) {
                         sb.append("| ");
                     }
                 }
@@ -129,5 +86,18 @@ public class Memory {
         return sb.toString();
     }
 
+    public char popFromStack() {
+    	char value = (char) readChar(0xFFFD);
+    	writeChar(0xFFFD, readChar(0xFFFD) + 1);
+    	return value;
+    }
 
+    public void pushToStack(byte value) {
+    	writeChar(0xFFFD, readChar(0xFFFD) - 1);
+    	writeByte(readChar(0xFFFD), value);
+    }
+
+
+
+    // Additional methods if needed
 }

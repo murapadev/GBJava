@@ -5,8 +5,7 @@ public class Registers {
 	private char PC, SP;
 
 	public Registers() {
-		A = B = C = D = E = F = H = L = 0;
-		PC = SP = 0;
+		reset();
 	}
 
 	public byte getRegister(String register) {
@@ -19,11 +18,6 @@ public class Registers {
 			case "F" -> F;
 			case "H" -> H;
 			case "L" -> L;
-			case "AF" -> (byte) ((A << 8) | (F & 0xFF));
-			case "BC" -> (byte) ((B << 8) | (C & 0xFF));
-			case "DE" -> (byte) ((D << 8) | (E & 0xFF));
-			case "HL" -> (byte) ((H << 8) | (L & 0xFF));
-
 			default -> throw new IllegalArgumentException("Invalid register: " + register);
 		};
 	}
@@ -38,10 +32,6 @@ public class Registers {
 			case "F" -> F = value;
 			case "H" -> H = value;
 			case "L" -> L = value;
-			case "AF" -> setAF((char) ((value << 8) | (F & 0xFF)));
-			case "BC" -> setBC((char) ((B << 8) | (value & 0xFF)));
-			case "DE" -> setDE((char) ((D << 8) | (value & 0xFF)));
-			case "HL" -> setHL((char) ((H << 8) | (value & 0xFF)));
 			default -> throw new IllegalArgumentException("Invalid register: " + register);
 		}
 	}
@@ -99,8 +89,16 @@ public class Registers {
 	}
 
 	public void reset() {
-		A = B = C = D = E = F = H = L = 0;
-		PC = SP = 0;
+		A = 0x01;
+		B = 0x00;
+		C = 0x13;
+		D = 0x00;
+		E = (byte) 0xD8;
+		F = (byte) 0xB0;
+		H = 0x01;
+		L = 0x4d;
+		SP = 0xfffe;
+		PC = 0x0100;
 	}
 
 	public void incrementPC() {
@@ -109,7 +107,15 @@ public class Registers {
 
 	@Override
 	public String toString() {
-		return "A: " + A + "\n" + "B: " + B + "\n" + "C: " + C + "\n" + "D: " + D + "\n" + "E: " + E + "\n" + "F: " + F
-				+ "\n" + "H: " + H + "\n" + "L: " + L + "\n" + "PC: " + PC + "\n" + "SP: " + SP + "\n";
+		return "A: 0x" + String.format("%02X", A) + "\n" +
+				"B: 0x" + String.format("%02X", B) + "\n" +
+				"C: 0x" + String.format("%02X", C) + "\n" +
+				"D: 0x" + String.format("%02X", D) + "\n" +
+				"E: 0x" + String.format("%02X", E) + "\n" +
+				"F: 0x" + String.format("%02X", F) + "\n" +
+				"H: 0x" + String.format("%02X", H) + "\n" +
+				"L: 0x" + String.format("%02X", L) + "\n" +
+				"PC: 0x" + String.format("%04X", (int) PC) + "\n" +
+				"SP: 0x" + String.format("%04X", (int) SP) + "\n";
 	}
 }

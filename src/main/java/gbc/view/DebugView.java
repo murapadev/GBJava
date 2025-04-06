@@ -1,20 +1,26 @@
 package gbc.view;
 
-import javax.swing.*;
-import java.awt.*;
+import gbc.model.GameBoyColor;
 import gbc.model.cpu.CPU;
 import gbc.model.memory.Memory;
 
+import javax.swing.*;
+import java.awt.*;
+
 public class DebugView extends JFrame {
+
+    private final GameBoyColor gbc;
     private final CPU cpu;
     private final Memory memory;
     private final JTextArea opcodeArea;
     private final JTextArea memoryArea;
     private final JTextArea registerArea;
 
-    public DebugView(CPU cpu, Memory memory) {
-        this.cpu = cpu;
-        this.memory = memory;
+    public DebugView(GameBoyColor gbc) {
+        this.gbc = gbc;
+        this.cpu = gbc.getCpu();
+        this.memory = gbc.getMemory();
+
 
         setTitle("Emulator Debug View");
         setPreferredSize(new Dimension(800, 600)); // Preferred size is used for better layout management
@@ -33,10 +39,8 @@ public class DebugView extends JFrame {
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE); // Change to DISPOSE to avoid shutting down the whole app
         pack(); // Use pack instead of setSize to fit components
         setLocationRelativeTo(null); // Center on screen
-        setVisible(true);
+        setVisible(false);
 
-        // Set a timer to refresh the debug information regularly
-        new Timer(500, e -> update()).start(); // Update every 500ms, adjust as needed
     }
 
     private JTextArea createTextArea() {
@@ -47,20 +51,18 @@ public class DebugView extends JFrame {
     }
 
     public void update() {
-        SwingUtilities.invokeLater(() -> { // Ensure updates are done on the EDT
 
-            if(super.isVisible()){
-                updateOpcodes();
-                updateMemory();
-                updateRegisters();
+        if (super.isVisible()) {
+            updateOpcodes();
+            updateMemory();
+            updateRegisters();
         }
-        });
 
     }
 
     private void updateOpcodes() {
         // Display current opcode and next few opcodes
-        opcodeArea.setText(cpu.getOpLog().toString()); // Requires toString method in Opcode class
+        opcodeArea.setText(cpu.getOpcodeLog()); // Requires toString method in Opcode class
     }
 
     private void updateMemory() {
