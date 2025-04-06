@@ -1,2 +1,5 @@
 *.gb
 *.gbc
+.idea/
+.gradle/
+target/

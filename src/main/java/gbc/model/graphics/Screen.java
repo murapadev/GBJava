@@ -1,50 +1,23 @@
 package gbc.model.graphics;
 
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import javax.swing.JPanel;
-import gbc.model.memory.Memory;
 
 public class Screen extends JPanel {
-    private static final int WIDTH = 160;
-    private static final int HEIGHT = 144;
+    private static final int WIDTH = 160; // Game Boy screen width
+    private static final int HEIGHT = 144; // Game Boy screen height
 
-    private Memory memory;
     private BufferedImage image;
 
-    public Screen(Memory memory) {
-        this.memory = memory;
+    public Screen() {
         this.image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
-        this.setPreferredSize(new Dimension(WIDTH, HEIGHT));
-        this.setBackground(Color.WHITE);
+        setPreferredSize(new Dimension(WIDTH, HEIGHT));
     }
 
-    public void render() {
-        for (int y = 0; y < HEIGHT; y++) {
-            for (int x = 0; x < WIDTH; x++) {
-                int colorValue = this.memory.readByte(0x8000 + (y * WIDTH) + x) & 0xFF;
-                Color color = getColorFromValue(colorValue);
-                this.image.setRGB(x, y, color.getRGB());
-            }
-        }
-        this.repaint();
-    }
-
-    private Color getColorFromValue(int colorValue) {
-        // Implement color conversion logic here
-        // Placeholder for demonstration:
-        int rgb = colorValue | (colorValue << 8) | (colorValue << 16);
-        return new Color(rgb);
-    }
-
-    public void clear() {
-        Graphics g = this.image.getGraphics();
-        g.setColor(Color.WHITE);
-        g.fillRect(0, 0, WIDTH, HEIGHT);
-        g.dispose();
-        this.repaint();
+    public void render(int[] frameBuffer) {
+        image.setRGB(0, 0, WIDTH, HEIGHT, frameBuffer, 0, WIDTH);
+        repaint();
     }
 
     @Override
@@ -53,20 +26,69 @@ public class Screen extends JPanel {
         g.drawImage(this.image, 0, 0, this);
     }
 
-    public void setPixel(int x, int y, Color color) {
-        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
-            this.image.setRGB(x, y, color.getRGB());
-        }
-    }
-
-    public Color getPixel(int x, int y) {
-        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
-            return new Color(this.image.getRGB(x, y));
-        }
-        return Color.WHITE;
-    }
-
     public BufferedImage getImage() {
         return this.image;
+    }
+
+    public void setImage(BufferedImage image) {
+        this.image = image;
+    }
+
+    public int getWidth() {
+        return WIDTH;
+    }
+
+    public int getHeight() {
+        return HEIGHT;
+    }
+
+    public void setPixel(int x, int y, int color) {
+        this.image.setRGB(x, y, color);
+    }
+
+    public int getPixel(int x, int y) {
+        return this.image.getRGB(x, y);
+    }
+
+    public void clear() {
+        this.image = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+    }
+
+    public void clear(int color) {
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                this.image.setRGB(x, y, color);
+            }
+        }
+    }
+
+public void drawLine(int x1, int y1, int x2, int y2, int color) {
+        int dx = Math.abs(x2 - x1);
+        int dy = Math.abs(y2 - y1);
+
+        int sx = (x1 < x2) ? 1 : -1;
+        int sy = (y1 < y2) ? 1 : -1;
+
+        int err = dx - dy;
+
+        while (true) {
+            this.setPixel(x1, y1, color);
+
+            if ((x1 == x2) && (y1 == y2)) {
+                break;
+            }
+
+            int e2 = 2 * err;
+
+            if (e2 > -dy) {
+                err -= dy;
+                x1 += sx;
+            }
+
+            if (e2 < dx) {
+                err += dx;
+                y1 += sy;
+            }
+        }
     }
 }
