@@ -1,6 +1,8 @@
 package gbc.model.memory;
 
 import gbc.model.cartridge.Cartridge;
+import gbc.model.cpu.Registers;
+import java.util.HashMap;
 
 public class Memory {
     private final byte[] memoryBank = new byte[0x10000]; // 65,536 bytes for the entire addressable range
@@ -86,18 +88,38 @@ public class Memory {
         return sb.toString();
     }
 
-    public char popFromStack() {
-    	char value = (char) readChar(0xFFFD);
-    	writeChar(0xFFFD, readChar(0xFFFD) + 1);
-    	return value;
+    public char popFromStack(char sp) {
+        char value = (char) readChar((int) sp);
+        return value;
     }
 
-    public void pushToStack(byte value) {
-    	writeChar(0xFFFD, readChar(0xFFFD) - 1);
-    	writeByte(readChar(0xFFFD), value);
+    public char popFromStack(char sp, Registers registers) {
+        char value = (char) readChar((int) sp);
+        int newSp = sp + 2;
+        registers.setSP((char) (newSp & 0xFFFF)); // Increment SP after pop
+        return value;
     }
 
+    public void pushToStack(char sp, char value, Registers registers) {
+        int newSp = sp - 2;
+        writeChar(newSp, value);
+        registers.setSP((char) (newSp & 0xFFFF));
+    }
 
+    public void pushToStack(char sp, byte value, Registers registers) {
+        int newSp = sp - 1;
+        writeByte(newSp, value);
+        registers.setSP((char) (newSp & 0xFFFF));
+    }
+
+    // Add missing getMemoryRange method for testing
+    public java.util.HashMap<Integer, Byte> getMemoryRange(int startAddress, int endAddress) {
+        java.util.HashMap<Integer, Byte> range = new java.util.HashMap<>();
+        for (int i = startAddress; i <= endAddress && i < memoryBank.length; i++) {
+            range.put(i, (byte) readByte(i));
+        }
+        return range;
+    }
 
     // Additional methods if needed
 }

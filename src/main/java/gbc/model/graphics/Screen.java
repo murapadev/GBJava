@@ -16,8 +16,23 @@ public class Screen extends JPanel {
     }
 
     public void render(int[] frameBuffer) {
+        if (frameBuffer.length != WIDTH * HEIGHT) {
+            System.err.println("Invalid frame buffer size: " + frameBuffer.length + ", expected: " + (WIDTH * HEIGHT));
+            return;
+        }
+        
+        // Convert Game Boy colors to RGB
+        for (int i = 0; i < frameBuffer.length; i++) {
+            frameBuffer[i] = convertGBColor(frameBuffer[i]);
+        }
+        
         image.setRGB(0, 0, WIDTH, HEIGHT, frameBuffer, 0, WIDTH);
         repaint();
+    }
+    
+    private int convertGBColor(int gbColor) {
+        // Game Boy colors are already RGB values in our implementation
+        return gbColor;
     }
 
     @Override

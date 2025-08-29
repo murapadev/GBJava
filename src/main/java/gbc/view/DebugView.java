@@ -15,6 +15,8 @@ public class DebugView extends JFrame {
     private final JTextArea opcodeArea;
     private final JTextArea memoryArea;
     private final JTextArea registerArea;
+    private final JButton memoryDumpButton;
+    private final JButton stackDumpButton;
 
     public DebugView(GameBoyColor gbc) {
         this.gbc = gbc;
@@ -29,17 +31,32 @@ public class DebugView extends JFrame {
         opcodeArea = createTextArea();
         memoryArea = createTextArea();
         registerArea = createTextArea();
+        memoryDumpButton = new JButton("Dump Memory (0xC000-0xC0FF)");
+        stackDumpButton = new JButton("Dump Stack (32 bytes)");
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(memoryDumpButton);
+        buttonPanel.add(stackDumpButton);
 
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Opcodes", new JScrollPane(opcodeArea));
         tabbedPane.addTab("Memory", new JScrollPane(memoryArea));
         tabbedPane.addTab("Registers", new JScrollPane(registerArea));
+        tabbedPane.addTab("Debug Tools", buttonPanel);
 
         add(tabbedPane, BorderLayout.CENTER);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE); // Change to DISPOSE to avoid shutting down the whole app
         pack(); // Use pack instead of setSize to fit components
         setLocationRelativeTo(null); // Center on screen
         setVisible(false);
+
+        memoryDumpButton.addActionListener(e -> {
+            String dump = cpu.dumpMemory(0xC000, 0xC0FF);
+            JOptionPane.showMessageDialog(this, dump, "Memory Dump", JOptionPane.INFORMATION_MESSAGE);
+        });
+        stackDumpButton.addActionListener(e -> {
+            String dump = cpu.dumpStack(32);
+            JOptionPane.showMessageDialog(this, dump, "Stack Dump", JOptionPane.INFORMATION_MESSAGE);
+        });
 
     }
 

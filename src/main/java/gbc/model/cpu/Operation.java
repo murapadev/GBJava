@@ -14,6 +14,10 @@ public class Operation {
     private Map<String, String> flags;
     private List<Map<String, Object>> operands;
 
+    public Operation() {
+        // Default constructor for Gson deserialization
+    }
+
     public Operation(OperationExecutor executor, String mnemonic, int bytes, List<Integer> cycles, boolean immediate, Map<String, String> flags, List<Map<String, Object>> operands) {
         this.executor = executor;
         this.mnemonic = mnemonic;

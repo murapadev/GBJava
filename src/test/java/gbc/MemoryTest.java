@@ -26,18 +26,18 @@ public class MemoryTest {
         byte value = (byte) 0xAB;
 
         memory.writeByte(address, value);
-        byte result = memory.readByte(address);
+        int result = memory.readByte(address);
 
-        assertEquals(value, result);
+        assertEquals(value & 0xFF, result);
     }
 
     @Test
     public void testReadAndWriteChar() {
         int address = 0x9871;
-        char value = (char) 0xCDEF;
+        int value = 0xCDEF;
 
         memory.writeChar(address, value);
-        char result = memory.readChar(address);
+        int result = memory.readChar(address);
 
         assertEquals(value, result);
     }
@@ -47,10 +47,14 @@ public class MemoryTest {
         int address = 0x2000;
         byte value = (byte) 0x55;
 
+        // Store original value
+        int originalValue = memory.readByte(address);
+        
         cartridge.write(address, value);
-        byte result = memory.readByte(address);
+        int result = memory.readByte(address);
 
-        assertEquals(value, result);
+        // ROM is read-only, so write should have no effect
+        assertEquals(originalValue, result);
     }
 
     @Test
@@ -58,10 +62,14 @@ public class MemoryTest {
         int address = 0x3000;
         byte value = (byte) 0xAA;
 
+        // Store original value
+        int originalValue = cartridge.read(address);
+        
         memory.writeByte(address, value);
-        byte result = cartridge.read(address);
+        int result = cartridge.read(address);
 
-        assertEquals(value, result);
+        // ROM is read-only, so write should have no effect
+        assertEquals(originalValue, result);
     }
 
     @Test
@@ -89,9 +97,9 @@ public class MemoryTest {
 
         memory.writeByte(address, value);
         memory.reset();
-        byte result = memory.readByte(address);
+        int result = memory.readByte(address);
 
-        assertEquals((byte) 0x00, result);
+        assertEquals(0x00, result);
     }
 
     @Test

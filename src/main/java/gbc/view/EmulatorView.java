@@ -28,9 +28,31 @@ public class EmulatorView extends JPanel {
 	@Override
 	public void paintComponent(Graphics g) {
 		super.paintComponent(g);
+		
+		// Fill background
+		g.setColor(Color.BLACK);
+		g.fillRect(0, 0, getWidth(), getHeight());
+		
 		BufferedImage image = screen.getImage();
 		if (image != null) {
-			g.drawImage(image, 0, 0, this.getWidth(), this.getHeight(), null);
+			// Scale the image to fit the component while maintaining aspect ratio
+			int componentWidth = getWidth();
+			int componentHeight = getHeight();
+			int imageWidth = image.getWidth();
+			int imageHeight = image.getHeight();
+			
+			// Calculate scaling factor to fit while maintaining aspect ratio
+			double scaleX = (double) componentWidth / imageWidth;
+			double scaleY = (double) componentHeight / imageHeight;
+			double scale = Math.min(scaleX, scaleY);
+			
+			int scaledWidth = (int) (imageWidth * scale);
+			int scaledHeight = (int) (imageHeight * scale);
+			
+			int x = (componentWidth - scaledWidth) / 2;
+			int y = (componentHeight - scaledHeight) / 2;
+			
+			g.drawImage(image, x, y, scaledWidth, scaledHeight, null);
 		}
 	}
 

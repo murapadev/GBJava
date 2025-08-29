@@ -25,16 +25,15 @@ public class GameBoyColor {
 		this.cpu = new CPU(this.memory);
 		this.screen = new Screen();
 		this.gpu = new GPU(this.memory, this.screen);
-		this.input = new Controller();
-
+		this.input = new Controller(this.memory);
 	}
 
-	public void executeCycle() {
+	public int executeCycle() {
 
 		input.handleInput();
-		cpu.executeCycle();
-		gpu.step(cpu.getCycles());
-		cpu.setCycles(0);
+		int cycles = cpu.executeCycle();
+		gpu.step(cycles);
+		return cycles;
 	}
 
 	public void insertCartridge(String path) {
