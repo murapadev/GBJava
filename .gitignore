@@ -4,3 +4,4 @@
 .gradle/
 target/
 *.log
+*.sav
