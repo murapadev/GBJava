@@ -2,19 +2,31 @@ package gbc.model.graphics;
 
 import gbc.model.memory.Memory;
 
-public class GPU {
+public class PPU {
     private Memory memory;
     private Screen screen;
     private int[] frameBuffer = new int[160 * 144]; // Frame buffer array
 
-    private int mode; // Current mode of the GPU
+    private int mode; // Current mode of the PPU
     private int modeClock; // Clock for timing mode changes
 
-    public GPU(Memory memory, Screen screen) {
+    // Pixel FIFO components
+    private PixelFifo pixelFifo;
+    private Fetcher fetcher;
+    private PixelTransfer pixelTransfer;
+    private OamSearch oamSearch;
+
+    public PPU(Memory memory, Screen screen) {
         this.memory = memory;
         this.screen = screen;
         this.mode = 2; // Start in OAM mode
         this.modeClock = 0;
+
+        // Initialize pixel FIFO system
+        this.pixelFifo = new DmgPixelFifo(screen, memory);
+        this.fetcher = new Fetcher(pixelFifo, memory);
+        this.oamSearch = new OamSearch(memory);
+        this.pixelTransfer = new PixelTransfer(pixelFifo, fetcher, memory, oamSearch.getSprites());
     }
 
     public void step(int cycles) {
@@ -24,13 +36,24 @@ public class GPU {
                 if (modeClock >= 80) {
                     modeClock = 0;
                     mode = 3; // Switch to VRAM mode
+                    // Search for sprites on this scanline
+                    int currentLine = memory.readByte(0xFF44) & 0xFF;
+                    oamSearch.searchSprites(currentLine);
+                    pixelTransfer.start(); // Start pixel transfer
                 }
             }
-            case 3 -> { // VRAM mode
-                if (modeClock >= 172) {
+            case 3 -> { // Pixel Transfer mode - use variable timing
+                // Run pixel transfer for the available cycles
+                boolean transferComplete = false;
+                for (int i = 0; i < cycles && !transferComplete; i++) {
+                    transferComplete = !pixelTransfer.tick();
+                    modeClock++;
+                }
+
+                if (transferComplete) { // Transfer complete
                     modeClock = 0;
                     mode = 0; // Switch to HBlank
-                    updateLine();
+                    updateLine(); // Fallback for now
                 }
             }
             case 0 -> { // HBlank
@@ -66,9 +89,12 @@ public class GPU {
     }
 
     /**
-     * Render a full frame using background tile map (0x9800/0x9C00) and tile data (0x8000/0x8800).
-     * This implementation respects LCDC control bits for tile data/map selection and uses SCX/SCY
-     * and BGP (0xFF47) palette mapping. It still ignores sprites and window for simplicity.
+     * Render a full frame using background tile map (0x9800/0x9C00) and tile data
+     * (0x8000/0x8800).
+     * This implementation respects LCDC control bits for tile data/map selection
+     * and uses SCX/SCY
+     * and BGP (0xFF47) palette mapping. It still ignores sprites and window for
+     * simplicity.
      */
     private void renderFrame() {
         final int WIDTH = 160;
@@ -86,20 +112,22 @@ public class GPU {
         // If LCD is disabled, show a blank (white) screen
         if (!lcdEnabled) {
             int white = 0xFFFFFF;
-            for (int i = 0; i < WIDTH * HEIGHT; i++) frameBuffer[i] = white;
+            for (int i = 0; i < WIDTH * HEIGHT; i++)
+                frameBuffer[i] = white;
             screen.render(frameBuffer);
             return;
         }
 
         // Determine background map base address (bit 3)
         int bgMapBase = (lcdc & 0x08) != 0 ? 0x9C00 : 0x9800;
-        // Determine tile data base (bit 4). If 0 -> signed indexing with base 0x9000; if 1 -> unsigned at 0x8000
+        // Determine tile data base (bit 4). If 0 -> signed indexing with base 0x9000;
+        // if 1 -> unsigned at 0x8000
         boolean tileDataUnsigned = (lcdc & 0x10) != 0;
         int tileDataBaseUnsigned = 0x8000;
         int tileDataBaseSigned = 0x9000;
 
         // Greyscale palette for rendering (actual Game Boy uses 4 shades)
-        int[] grays = new int[] {0xFFFFFF, 0xC0C0C0, 0x606060, 0x000000};
+        int[] grays = new int[] { 0xFFFFFF, 0xC0C0C0, 0x606060, 0x000000 };
 
         for (int y = 0; y < HEIGHT; y++) {
             int bgY = (y + scy) & 0xFF; // wrap-around
@@ -119,7 +147,8 @@ public class GPU {
                 if (tileDataUnsigned) {
                     tileAddr = tileDataBaseUnsigned + tileNumber * 16;
                 } else {
-                    // Signed indexing mode: tileNumber is signed - use 0x9000 as base with signed index
+                    // Signed indexing mode: tileNumber is signed - use 0x9000 as base with signed
+                    // index
                     byte signed = (byte) tileNumber;
                     tileAddr = tileDataBaseSigned + (signed * 16);
                 }
@@ -147,21 +176,25 @@ public class GPU {
 
             for (int wyPos = 0; wyPos < HEIGHT; wyPos++) {
                 int screenY = wyPos;
-                if (screenY < wy) continue;
+                if (screenY < wy)
+                    continue;
                 int windowRow = (wyPos - wy) & 0xFF;
                 int rowInTileW = windowRow % TILE_HEIGHT;
 
                 for (int wxPos = 0; wxPos < WIDTH; wxPos++) {
                     int screenX = wxPos;
-                    if (screenX < wx) continue;
+                    if (screenX < wx)
+                        continue;
                     int windowCol = (wxPos - wx) / TILE_WIDTH;
                     int mapIndex = (windowRow / TILE_HEIGHT) * 32 + windowCol;
                     int mapAddr = windowMapBase + mapIndex;
                     int tileNumber = memory.readByte(mapAddr) & 0xFF;
 
                     int tileAddr;
-                    if (tileDataUnsigned) tileAddr = tileDataBaseUnsigned + tileNumber * 16;
-                    else tileAddr = tileDataBaseSigned + ((byte) tileNumber) * 16;
+                    if (tileDataUnsigned)
+                        tileAddr = tileDataBaseUnsigned + tileNumber * 16;
+                    else
+                        tileAddr = tileDataBaseSigned + ((byte) tileNumber) * 16;
 
                     int lowByte = memory.readByte(tileAddr + rowInTileW * 2) & 0xFF;
                     int highByte = memory.readByte(tileAddr + rowInTileW * 2 + 1) & 0xFF;
@@ -197,7 +230,8 @@ public class GPU {
                 int palette = (attr & 0x10) != 0 ? obp1 : obp0;
 
                 int tileIndex = tile;
-                if (spriteHeight == 16) tileIndex &= 0xFE;
+                if (spriteHeight == 16)
+                    tileIndex &= 0xFE;
 
                 for (int sy = 0; sy < spriteHeight; sy++) {
                     int row = yFlip ? (spriteHeight - 1 - sy) : sy;
@@ -207,23 +241,27 @@ public class GPU {
                     int high = memory.readByte(tileAddr + 1) & 0xFF;
 
                     int py = yPos + sy;
-                    if (py < 0 || py >= HEIGHT) continue;
+                    if (py < 0 || py >= HEIGHT)
+                        continue;
 
                     for (int sx = 0; sx < 8; sx++) {
                         int bit = xFlip ? sx : (7 - sx);
                         int lo = (low >> bit) & 0x1;
                         int hi = (high >> bit) & 0x1;
                         int colorIndex = (hi << 1) | lo;
-                        if (colorIndex == 0) continue; // transparent
+                        if (colorIndex == 0)
+                            continue; // transparent
 
                         int paletteIndex = (palette >> (colorIndex * 2)) & 0x3;
                         int color = grays[paletteIndex];
 
                         int px = xPos + sx;
-                        if (px < 0 || px >= WIDTH) continue;
+                        if (px < 0 || px >= WIDTH)
+                            continue;
 
                         // If priority set and background is non-zero (not white), skip drawing
-                        if (priority && frameBuffer[py * WIDTH + px] != grays[0]) continue;
+                        if (priority && frameBuffer[py * WIDTH + px] != grays[0])
+                            continue;
 
                         frameBuffer[py * WIDTH + px] = color;
                     }
@@ -247,12 +285,15 @@ public class GPU {
             frameBuffer[offset + i] = color;
         }
 
-        // We avoid calling screen.render on every scanline; full frame rendering is done elsewhere
+        // We avoid calling screen.render on every scanline; full frame rendering is
+        // done elsewhere
     }
 
     /**
-     * Render a full frame using background tile map (0x9800) and tile data (0x8000).
-     * This is a simplified renderer: it ignores scrolling, window, sprites, and palettes
+     * Render a full frame using background tile map (0x9800) and tile data
+     * (0x8000).
+     * This is a simplified renderer: it ignores scrolling, window, sprites, and
+     * palettes
      * and assumes unsigned tile indexing and a simple 4-color grayscale mapping.
      */
     private void renderFrameOld() {
@@ -264,7 +305,7 @@ public class GPU {
         final int TILE_DATA_ADDR = 0x8000; // using unsigned indexing
 
         // Palette: 0=white, 1=light gray, 2=dark gray, 3=black
-        int[] palette = new int[] {0xFFFFFF, 0xC0C0C0, 0x606060, 0x000000};
+        int[] palette = new int[] { 0xFFFFFF, 0xC0C0C0, 0x606060, 0x000000 };
 
         // For each pixel in screen, determine tile and pixel within tile
         for (int y = 0; y < HEIGHT; y++) {
@@ -302,6 +343,7 @@ public class GPU {
             renderFrame();
         } catch (Exception e) {
             // Rendering must not crash emulator; fallback to simple updateLine
+            System.err.println("PPU rendering error: " + e.getMessage());
             updateLine();
         }
     }

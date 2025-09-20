@@ -46,7 +46,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <java.awt.headless>true</java.awt.headless>
-                        <!-- Speed up GPU tests that wait for VBlank edges -->
+                        <!-- Speed up PPU tests that wait for VBlank edges -->
                         <gbc.ppu.dotScale>8</gbc.ppu.dotScale>
                     </systemPropertyVariables>
                 </configuration>

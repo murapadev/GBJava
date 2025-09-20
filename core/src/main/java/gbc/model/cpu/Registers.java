@@ -2,7 +2,7 @@ package gbc.model.cpu;
 
 public class Registers {
 	private byte A, B, C, D, E, F, H, L;
-	private char PC, SP;
+	private int PC, SP;
 
 	public Registers() {
 		reset();
@@ -29,61 +29,61 @@ public class Registers {
 			case "C" -> C = value;
 			case "D" -> D = value;
 			case "E" -> E = value;
-			case "F" -> F = value;
+			case "F" -> F = (byte) (value & 0xF0); // F register: lower 4 bits always 0
 			case "H" -> H = value;
 			case "L" -> L = value;
 			default -> throw new IllegalArgumentException("Invalid register: " + register);
 		}
 	}
 
-	public char getPC() {
+	public int getPC() {
 		return PC;
 	}
 
-	public void setPC(char value) {
+	public void setPC(int value) {
 		PC = value;
 	}
 
-	public char getSP() {
+	public int getSP() {
 		return SP;
 	}
 
-	public void setSP(char value) {
+	public void setSP(int value) {
 		SP = value;
 	}
 
-	public char getAF() {
-		return (char) ((A << 8) | (F & 0xFF));
+	public int getAF() {
+		return ((A & 0xFF) << 8) | (F & 0xFF);
 	}
 
-	public void setAF(char value) {
+	public void setAF(int value) {
 		A = (byte) ((value >> 8) & 0xFF);
-		F = (byte) (value & 0xFF);
+		F = (byte) (value & 0xF0); // F register: lower 4 bits always 0
 	}
 
-	public char getBC() {
-		return (char) ((B << 8) | (C & 0xFF));
+	public int getBC() {
+		return ((B & 0xFF) << 8) | (C & 0xFF);
 	}
 
-	public void setBC(char value) {
+	public void setBC(int value) {
 		B = (byte) ((value >> 8) & 0xFF);
 		C = (byte) (value & 0xFF);
 	}
 
-	public char getDE() {
-		return (char) ((D << 8) | (E & 0xFF));
+	public int getDE() {
+		return ((D & 0xFF) << 8) | (E & 0xFF);
 	}
 
-	public void setDE(char value) {
+	public void setDE(int value) {
 		D = (byte) ((value >> 8) & 0xFF);
 		E = (byte) (value & 0xFF);
 	}
 
-	public char getHL() {
-		return (char) ((H << 8) | (L & 0xFF));
+	public int getHL() {
+		return ((H & 0xFF) << 8) | (L & 0xFF);
 	}
 
-	public void setHL(char value) {
+	public void setHL(int value) {
 		H = (byte) ((value >> 8) & 0xFF);
 		L = (byte) (value & 0xFF);
 	}
@@ -105,6 +105,55 @@ public class Registers {
 		PC++;
 	}
 
+	// Flag convenience methods for cleaner code
+	public boolean isZ() {
+		return (F & 0x80) != 0;
+	}
+
+	public boolean isN() {
+		return (F & 0x40) != 0;
+	}
+
+	public boolean isH() {
+		return (F & 0x20) != 0;
+	}
+
+	public boolean isC() {
+		return (F & 0x10) != 0;
+	}
+
+	public void setZ(boolean value) {
+		if (value) {
+			F |= 0x80;
+		} else {
+			F &= 0x7F;
+		}
+	}
+
+	public void setN(boolean value) {
+		if (value) {
+			F |= 0x40;
+		} else {
+			F &= 0xBF;
+		}
+	}
+
+	public void setH(boolean value) {
+		if (value) {
+			F |= 0x20;
+		} else {
+			F &= 0xDF;
+		}
+	}
+
+	public void setC(boolean value) {
+		if (value) {
+			F |= 0x10;
+		} else {
+			F &= 0xEF;
+		}
+	}
+
 	@Override
 	public String toString() {
 		return "A: 0x" + String.format("%02X", A) + "\n" +
@@ -115,7 +164,7 @@ public class Registers {
 				"F: 0x" + String.format("%02X", F) + "\n" +
 				"H: 0x" + String.format("%02X", H) + "\n" +
 				"L: 0x" + String.format("%02X", L) + "\n" +
-				"PC: 0x" + String.format("%04X", (int) PC) + "\n" +
-				"SP: 0x" + String.format("%04X", (int) SP) + "\n";
+				"PC: " + PC + "\n" +
+				"SP: " + SP + "\n";
 	}
 }

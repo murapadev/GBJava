@@ -13,7 +13,7 @@ public class EmulatorController {
 	private EmulatorWindow view;
 	private final AtomicBoolean running = new AtomicBoolean(true);
 	private final AtomicBoolean paused = new AtomicBoolean(false);
-	
+
 	// Target frame rate (60 FPS for Game Boy)
 	private static final int TARGET_FPS = 60;
 	private static final long FRAME_TIME_NS = 1_000_000_000L / TARGET_FPS;
@@ -50,7 +50,7 @@ public class EmulatorController {
 				// Not used
 			}
 		});
-		
+
 		// Make sure the view can receive focus for key events
 		view.setFocusable(true);
 		view.requestFocusInWindow();
@@ -63,24 +63,24 @@ public class EmulatorController {
 
 		// Main emulation loop
 		long lastFrameTime = System.nanoTime();
-		
+
 		while (running.get()) {
 			long currentTime = System.nanoTime();
 			long deltaTime = currentTime - lastFrameTime;
-			
+
 			if (deltaTime >= FRAME_TIME_NS && !paused.get()) {
 				// Handle input
 				handleInput();
-				
+
 				// Execute one frame worth of cycles
 				executeFrame();
-				
+
 				// Update view
 				view.update();
-				
+
 				lastFrameTime = currentTime;
 			}
-			
+
 			// Small sleep to prevent busy waiting
 			try {
 				Thread.sleep(1);
@@ -95,7 +95,7 @@ public class EmulatorController {
 		// Execute enough cycles for one frame (approximately 70224 cycles per frame)
 		int cyclesPerFrame = 70224;
 		int executedCycles = 0;
-		
+
 		while (executedCycles < cyclesPerFrame) {
 			int cycles = gbc.executeCycle();
 			executedCycles += cycles;
@@ -103,8 +103,8 @@ public class EmulatorController {
 	}
 
 	public void handleInput() {
-		// Input is handled through key listeners, but we can add additional logic here
-		gbc.getController().handleInput();
+		// Input is handled through key listeners directly via button setters
+		// No need for additional handleInput call
 	}
 
 	private void handleKeyPress(KeyEvent e) {
@@ -142,10 +142,10 @@ public class EmulatorController {
 			System.out.println("ROM loaded successfully: " + path);
 		} catch (Exception e) {
 			System.err.println("Error loading ROM: " + e.getMessage());
-			JOptionPane.showMessageDialog(view, 
-				"Error loading ROM: " + e.getMessage(), 
-				"ROM Load Error", 
-				JOptionPane.ERROR_MESSAGE);
+			JOptionPane.showMessageDialog(view,
+					"Error loading ROM: " + e.getMessage(),
+					"ROM Load Error",
+					JOptionPane.ERROR_MESSAGE);
 		}
 	}
 

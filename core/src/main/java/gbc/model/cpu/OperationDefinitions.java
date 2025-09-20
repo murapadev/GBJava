@@ -7,12 +7,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Pure in-code catalogue of CPU operations. The Game Boy ISA is organised here by families so we
- * can expand coverage incrementally without relying on external JSON descriptors.
+ * Pure in-code catalogue of CPU operations. The Game Boy ISA is organised here
+ * by families so we
+ * can expand coverage incrementally without relying on external JSON
+ * descriptors.
  */
 final class OperationDefinitions {
 
-    private OperationDefinitions() {}
+    private OperationDefinitions() {
+    }
 
     static EnumMap<OperationType, Map<Integer, Operation>> buildUnprefixedTable() {
         EnumMap<OperationType, Map<Integer, Operation>> grouped = initGroups();
@@ -42,7 +45,8 @@ final class OperationDefinitions {
     private static void registerMisc(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
         register(grouped, OperationType.MISC, 0x00, "NOP", 1, cycles(4), false);
 
-        // Return instructions keep emulator control flow ticking even before a full instruction set is defined.
+        // Return instructions keep emulator control flow ticking even before a full
+        // instruction set is defined.
         register(grouped, OperationType.CONTROL_FLOW, 0xC9, "RET", 1, cycles(16), false);
         register(grouped, OperationType.CONTROL_FLOW, 0xD9, "RETI", 1, cycles(16), false);
     }
@@ -84,8 +88,8 @@ final class OperationDefinitions {
 
     private static void registerArithmetic(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
         OperationType type = OperationType.ARITHMETIC;
-        String[] targets = {"B", "C", "D", "E", "H", "L", "HL", "A"};
-        boolean[] isRegister = {true, true, true, true, true, true, false, true};
+        String[] targets = { "B", "C", "D", "E", "H", "L", "HL", "A" };
+        boolean[] isRegister = { true, true, true, true, true, true, false, true };
 
         // ADD A, r/(HL)
         for (int i = 0; i < targets.length; i++) {
@@ -122,8 +126,8 @@ final class OperationDefinitions {
 
     private static void registerLogic(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
         OperationType type = OperationType.LOGIC;
-        String[] targets = {"B", "C", "D", "E", "H", "L", "HL", "A"};
-        boolean[] isRegister = {true, true, true, true, true, true, false, true};
+        String[] targets = { "B", "C", "D", "E", "H", "L", "HL", "A" };
+        boolean[] isRegister = { true, true, true, true, true, true, false, true };
 
         // AND A, r/(HL)
         for (int i = 0; i < targets.length; i++) {
@@ -160,10 +164,10 @@ final class OperationDefinitions {
 
     private static void registerIncDec(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
         OperationType type = OperationType.INC_DEC;
-        String[] targets = {"B", "C", "D", "E", "H", "L", "HL", "A"};
-        boolean[] isRegister = {true, true, true, true, true, true, false, true};
-        int[] incOpcodes = {0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x34, 0x3C};
-        int[] decOpcodes = {0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x35, 0x3D};
+        String[] targets = { "B", "C", "D", "E", "H", "L", "HL", "A" };
+        boolean[] isRegister = { true, true, true, true, true, true, false, true };
+        int[] incOpcodes = { 0x04, 0x0C, 0x14, 0x1C, 0x24, 0x2C, 0x34, 0x3C };
+        int[] decOpcodes = { 0x05, 0x0D, 0x15, 0x1D, 0x25, 0x2D, 0x35, 0x3D };
 
         for (int i = 0; i < targets.length; i++) {
             register(grouped, type, incOpcodes[i], "INC", 1, cycles(isRegister[i] ? 4 : 12), false,
@@ -188,8 +192,8 @@ final class OperationDefinitions {
 
     private static void registerBitOperations(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
         OperationType type = OperationType.BIT_MANIPULATION;
-        String[] targets = {"B", "C", "D", "E", "H", "L", "HL", "A"};
-        boolean[] isRegister = {true, true, true, true, true, true, false, true};
+        String[] targets = { "B", "C", "D", "E", "H", "L", "HL", "A" };
+        boolean[] isRegister = { true, true, true, true, true, true, false, true };
 
         for (int bit = 0; bit < 8; bit++) {
             for (int index = 0; index < targets.length; index++) {
@@ -209,24 +213,25 @@ final class OperationDefinitions {
     }
 
     private static void register(EnumMap<OperationType, Map<Integer, Operation>> grouped,
-                                 OperationType type,
-                                 int opcode,
-                                 String mnemonic,
-                                 int bytes,
-                                 List<Integer> cycles,
-                                 boolean immediate) {
+            OperationType type,
+            int opcode,
+            String mnemonic,
+            int bytes,
+            List<Integer> cycles,
+            boolean immediate) {
         register(grouped, type, opcode, mnemonic, bytes, cycles, immediate, List.of());
     }
 
     private static void register(EnumMap<OperationType, Map<Integer, Operation>> grouped,
-                                 OperationType type,
-                                 int opcode,
-                                 String mnemonic,
-                                 int bytes,
-                                 List<Integer> cycles,
-                                 boolean immediate,
-                                 List<Map<String, Object>> operands) {
-        Operation operation = new Operation(null, mnemonic, bytes, cycles, immediate, Map.of(), new ArrayList<>(operands));
+            OperationType type,
+            int opcode,
+            String mnemonic,
+            int bytes,
+            List<Integer> cycles,
+            boolean immediate,
+            List<Map<String, Object>> operands) {
+        Operation operation = new Operation(null, mnemonic, bytes, cycles, immediate, Map.of(),
+                new ArrayList<>(operands));
         operation.setType(type);
         grouped.computeIfAbsent(type, ignored -> new HashMap<>())
                 .put(opcode & 0xFF, operation);
@@ -250,11 +255,19 @@ final class OperationDefinitions {
     }
 
     private static Map<String, Object> reg(String name) {
-        return operand(name, true);
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", name);
+        map.put("immediate", false);
+        map.put("memory", false);
+        return map;
     }
 
     private static Map<String, Object> mem(String alias) {
-        return operand(alias, false);
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", alias);
+        map.put("immediate", false);
+        map.put("memory", true);
+        return map;
     }
 
     private static Map<String, Object> imm(String alias) {

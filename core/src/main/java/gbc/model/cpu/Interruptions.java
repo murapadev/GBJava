@@ -1,10 +1,11 @@
 package gbc.model.cpu;
+
 import gbc.model.memory.Memory;
 
 public class Interruptions {
-    private boolean masterEnabled;
     private Memory memory;
     private Registers registers;
+    private CPU cpu;
 
     private static final int ADDR_INTERRUPT_FLAG = 0xFF0F;
     private static final int ADDR_INTERRUPT_ENABLE = 0xFFFF;
@@ -15,18 +16,10 @@ public class Interruptions {
     private static final byte INTERRUPT_SERIAL = 0x08;
     private static final byte INTERRUPT_JOYPAD = 0x10;
 
-    public Interruptions(Memory memory, Registers registers) {
+    public Interruptions(Memory memory, Registers registers, CPU cpu) {
         this.memory = memory;
         this.registers = registers;
-        this.masterEnabled = true;
-    }
-
-    public void setMasterEnabled(boolean enabled) {
-        this.masterEnabled = enabled;
-    }
-
-    public boolean isMasterEnabled() {
-        return masterEnabled;
+        this.cpu = cpu;
     }
 
     public void requestInterrupt(byte interrupt) {
@@ -36,10 +29,6 @@ public class Interruptions {
     }
 
     public void handleInterrupts() {
-        if (!masterEnabled) {
-            return;
-        }
-
         byte interruptFlag = (byte) memory.readByte(ADDR_INTERRUPT_FLAG);
         byte interruptEnable = (byte) memory.readByte(ADDR_INTERRUPT_ENABLE);
 
@@ -69,8 +58,8 @@ public class Interruptions {
         // Jump to interrupt handler
         registers.setPC((char) handlerAddress);
 
-        // Disable further interrupts
-        setMasterEnabled(false);
+        // Disable further interrupts (IME = 0)
+        cpu.setIme(false);
 
         // Reset the interrupt flag
         byte currentFlags = (byte) memory.readByte(ADDR_INTERRUPT_FLAG);
@@ -79,12 +68,11 @@ public class Interruptions {
     }
 
     private void pushPC() {
-        char sp = registers.getSP();
-        memory.writeChar((char) (sp - 2), registers.getPC());
-        registers.setSP((char) (sp - 2));
+        int sp = registers.getSP();
+        memory.writeChar(sp - 2, registers.getPC());
+        registers.setSP(sp - 2);
     }
 
     public void reset() {
-        masterEnabled = true;
     }
 }

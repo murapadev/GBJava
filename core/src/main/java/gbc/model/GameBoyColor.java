@@ -13,7 +13,7 @@ import gbc.model.graphics.*;
 public class GameBoyColor {
 	private final CPU cpu;
 	private final Memory memory;
-	private GPU gpu;
+	private PPU ppu;
 
 	private Screen screen;
 
@@ -23,15 +23,19 @@ public class GameBoyColor {
 		this.memory = new Memory();
 		this.cpu = new CPU(this.memory);
 		this.screen = new Screen();
-		this.gpu = new GPU(this.memory, this.screen);
+		this.ppu = new PPU(this.memory, this.screen);
 		this.input = new Controller(this.memory);
+
+		// Set up controller in memory and interruptions
+		this.memory.setController(this.input);
+		this.input.setInterruptions(this.cpu.getInterruptions());
 	}
 
 	public int executeCycle() {
 
-		input.handleInput();
 		int cycles = cpu.executeCycle();
-		gpu.step(cycles);
+		ppu.step(cycles);
+		memory.stepApu();
 		return cycles;
 	}
 
@@ -51,8 +55,8 @@ public class GameBoyColor {
 		cpu.reset();
 		memory.reset();
 		this.screen = new Screen();
-		gpu = new GPU(this.memory, this.screen);
-		
+		ppu = new PPU(this.memory, this.screen);
+
 	}
 
 	public Controller getController() {
@@ -67,8 +71,15 @@ public class GameBoyColor {
 		return this.memory;
 	}
 
+	public PPU getPpu() {
+		return this.ppu;
+	}
 
-	public GPU getGpu() {
-		return this.gpu;
+	public boolean isAudioBufferFull() {
+		return memory.isAudioBufferFull();
+	}
+
+	public byte[] fetchAudioSamples() {
+		return memory.fetchAudioSamples();
 	}
 }

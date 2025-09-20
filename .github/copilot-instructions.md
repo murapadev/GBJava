@@ -11,7 +11,7 @@ This is a Game Boy Color emulator written in Java 19, implementing a complete Ga
 - **MVC Pattern**: `GameBoyColor` (Model), `EmulatorController` (Controller), `EmulatorWindow` (View)
 - **CPU Implementation**: Complete instruction set with lambda-based operation executors
 - **Memory Management**: 64KB address space with cartridge loading and memory banking
-- **Graphics**: GPU implementation with screen rendering and LCD controller
+- **Graphics**: PPU implementation with screen rendering and LCD controller
 
 ### Critical Files to Understand
 
