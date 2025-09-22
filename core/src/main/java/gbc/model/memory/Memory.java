@@ -4,7 +4,7 @@ import gbc.model.cartridge.Cartridge;
 import gbc.model.cpu.Registers;
 import gbc.model.cpu.CPU; // Import CPU class
 import gbc.model.sound.Apu;
-import gbc.model.controller.Controller;
+import gbc.core.input.Controller;
 
 public class Memory {
     // APU (Audio Processing Unit) register constants
@@ -33,7 +33,6 @@ public class Memory {
     public static final int NR52 = 0xFF26; // APU control/status
 
     // CGB Memory Layout
-    private final byte[] bootstrapRom = new byte[0x800]; // 2KB Bootstrap ROM (0x0000-0x07FF)
     private final byte[] videoRam0 = new byte[0x2000]; // 8KB Video RAM Bank 0 (0x8000-0x9FFF)
     private final byte[] videoRam1 = new byte[0x2000]; // 8KB Video RAM Bank 1 (0x8000-0x9FFF) - CGB only
     private final byte[] workRam0 = new byte[0x1000]; // 4KB Work RAM Bank 0 (0xC000-0xCFFF) - fixed
@@ -47,6 +46,10 @@ public class Memory {
     private final byte[] highRam = new byte[0x7F]; // 127B High RAM (0xFF80-0xFFFE)
     private final byte[] oam = new byte[0xA0]; // 160B OAM (Object Attribute Memory) (0xFE00-0xFE9F)
     private byte interruptEnable; // Interrupt Enable Register (0xFFFF)
+
+    // Timer registers
+    private int div = 0; // Divider register (0xFF04)
+    private int divCounter = 0; // Counter for DIV increments
 
     // Memory banking
     private int vramBank; // VRAM bank select (0 or 1)
@@ -84,6 +87,15 @@ public class Memory {
 
     public byte[] fetchAudioSamples() {
         return apu.fetchSamples();
+    }
+
+    public void stepPeripherals(int cycles) {
+        // Increment DIV every 256 cycles (16384 Hz)
+        divCounter += cycles;
+        while (divCounter >= 256) {
+            divCounter -= 256;
+            div = (div + 1) & 0xFF;
+        }
     }
 
     public int readByte(int address) {
@@ -306,6 +318,10 @@ public class Memory {
         this.cartridge = cartridge;
     }
 
+    public boolean isCartridgeLoaded() {
+        return this.cartridge != null;
+    }
+
     public void reset() {
         // Reset VRAM banks
         for (int i = 0; i < videoRam0.length; i++) {
@@ -357,6 +373,10 @@ public class Memory {
         // Reset memory banking
         vramBank = 0;
         wramBank = 1;
+
+        // Reset timer registers
+        div = 0;
+        divCounter = 0;
 
         // Initialize other registers as required
     }
@@ -418,12 +438,48 @@ public class Memory {
 
     // I/O Register handling for CGB features
     private int readIORegister(int address) {
+        // FIXME: PPU I/O registers (LCDC=0xFF40, STAT=0xFF41, LY=0xFF44, etc.) are not
+        // initialized
+        // This causes renderFrame() to fail and show blank screen
+        // Need to add proper default values for Game Boy hardware registers
+
         // Joypad register (0xFF00)
         if (address == 0xFF00) {
             if (controller != null) {
                 return controller.getJoypadState();
             }
             return 0xCF; // Default: all buttons released
+        }
+
+        // PPU registers with Game Boy default values
+        switch (address) {
+            case 0xFF04: // DIV - Divider register
+                return div;
+            case 0xFF40: // LCDC - LCD Control
+                return 0x91; // LCD enabled, BG enabled, window tilemap 0x9C00, BG tilemap 0x9800
+            case 0xFF41: // STAT - LCD Status
+                return 0x85; // LYC=LY interrupt enabled, mode 1 (VBlank)
+            case 0xFF42: // SCY - Scroll Y
+                return 0x00;
+            case 0xFF43: // SCX - Scroll X
+                return 0x00;
+            case 0xFF44: // LY - LCD Y coordinate (current scanline)
+                return 0x00;
+            case 0xFF45: // LYC - LY compare
+                return 0x00;
+            case 0xFF46: // DMA - DMA transfer
+                return 0x00;
+            case 0xFF47: // BGP - Background palette
+                return 0xFC; // Default Game Boy palette
+            case 0xFF48: // OBP0 - Object palette 0
+                return 0xFF;
+            case 0xFF49: // OBP1 - Object palette 1
+                return 0xFF;
+            case 0xFF4A: // WY - Window Y position
+                return 0x00;
+            case 0xFF4B: // WX - Window X position
+                return 0x00;
+            // Add more PPU registers as needed...
         }
 
         // APU registers (0xFF10-0xFF3F)
@@ -464,6 +520,10 @@ public class Memory {
         }
 
         switch (address) {
+            case 0xFF04: // DIV - Divider register (writing resets to 0)
+                div = 0;
+                divCounter = 0;
+                break;
             case 0xFF4D: // KEY1 - Speed control register
                 if (cpu != null) {
                     cpu.writeKey1(value & 0xFF);
@@ -485,10 +545,6 @@ public class Memory {
     }
 
     // Memory region detection helpers
-    private boolean isBootstrapRom(int address) {
-        return address >= 0x0000 && address <= 0x07FF;
-    }
-
     private boolean isCartridgeRom(int address) {
         return address >= 0x0000 && address <= 0x7FFF;
     }

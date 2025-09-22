@@ -96,7 +96,7 @@ class CPUInstructionTest {
     @Test
     void decMemorySetsBorrowFlags() {
         loadProgram(0x21, 0x00, 0xC0, // LD HL, 0xC000
-                    0x35);            // DEC (HL)
+                0x35); // DEC (HL)
         registers.setRegister("F", (byte) 0);
         memory.writeByte(0xC000, 0x00);
 
@@ -113,7 +113,7 @@ class CPUInstructionTest {
     @Test
     void andMemoryAppliesPaletteFlags() {
         loadProgram(0x21, 0x00, 0xC0, // LD HL, 0xC000
-                    0xA6);            // AND (HL)
+                0xA6); // AND (HL)
         registers.setRegister("A", (byte) 0xF0);
         memory.writeByte(0xC000, 0x0F);
 
@@ -158,7 +158,7 @@ class CPUInstructionTest {
     @Test
     void ldTransfersBetweenRegisters() {
         loadProgram(0x06, 0x12, // LD B, d8
-                    0x78);     // LD A, B
+                0x78); // LD A, B
         registers.setRegister("A", (byte) 0x00);
 
         cpu.executeCycle();
@@ -170,12 +170,70 @@ class CPUInstructionTest {
     @Test
     void ldImmediateToMemoryStoresValue() {
         loadProgram(0x21, 0x00, 0xC0, // LD HL, 0xC000
-                    0x36, 0x42);     // LD (HL), d8
+                0x36, 0x42); // LD (HL), d8
 
         cpu.executeCycle();
         cpu.executeCycle();
 
         assertEquals(0x42, memory.readByte(0xC000) & 0xFF);
+    }
+
+    @Test
+    void haltSetsHaltedFlag() {
+        loadProgram(0x76); // HALT
+
+        cpu.executeCycle();
+
+        assertTrue(cpu.isHalted(), "CPU should be halted after HALT instruction");
+    }
+
+    @Test
+    void jrNzTakenUsesCorrectCycles() {
+        loadProgram(0x20, 0x05); // JR NZ, +5
+        registers.setRegister("F", (byte) 0); // Z=0, so taken
+
+        int cycles = cpu.executeCycle();
+
+        assertEquals(12, cycles, "JR NZ taken should use 12 cycles");
+    }
+
+    @Test
+    void jrNzNotTakenUsesCorrectCycles() {
+        loadProgram(0x20, 0x05); // JR NZ, +5
+        registers.setRegister("F", (byte) FLAG_Z); // Z=1, so not taken
+
+        int cycles = cpu.executeCycle();
+
+        assertEquals(8, cycles, "JR NZ not taken should use 8 cycles");
+    }
+
+    @Test
+    void popAfMasksFlagRegister() {
+        loadProgram(0x31, 0x00, 0xC0, // LD SP, 0xC000
+                0xF1); // POP AF
+        memory.writeChar(0xC000, 0x1234); // value to pop
+
+        cpu.executeCycle(); // LD SP
+        cpu.executeCycle(); // POP AF
+
+        assertEquals(0x12, registers.getRegister("A") & 0xFF);
+        assertEquals(0x30, registers.getRegister("F") & 0xFF, "F register should be masked to 0xF0");
+    }
+
+    @Test
+    void eiSetsImePending() {
+        loadProgram(0xFB, // EI
+                0x00); // NOP
+
+        cpu.executeCycle(); // EI
+
+        assertTrue(cpu.isImePending(), "EI should set imePending");
+        assertFalse(cpu.isIme(), "IME should not be set immediately");
+
+        cpu.executeCycle(); // NOP
+
+        assertTrue(cpu.isIme(), "IME should be set after next instruction");
+        assertFalse(cpu.isImePending(), "imePending should be cleared");
     }
 
     private void loadProgram(int... bytes) {

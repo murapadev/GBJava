@@ -4,7 +4,6 @@ import gbc.model.memory.Memory;
 
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class OperationsLoader {
@@ -12,15 +11,15 @@ public class OperationsLoader {
     private final Map<Integer, Operation> cbOperations;
     private final EnumMap<OperationType, Map<Integer, Operation>> groupedOperations;
     private final EnumMap<OperationType, Map<Integer, Operation>> groupedCbOperations;
-    private final Interruptions interruptions;
     private final CPU cpu;
+    private final Interruptions interruptions;
 
     public OperationsLoader() {
         this(null, null);
     }
 
     public OperationsLoader(Interruptions interruptions) {
-        this(interruptions, null);
+        this(null, null);
     }
 
     public OperationsLoader(Interruptions interruptions, CPU cpu) {
@@ -28,8 +27,8 @@ public class OperationsLoader {
         this.cbOperations = new HashMap<>();
         this.groupedOperations = new EnumMap<>(OperationType.class);
         this.groupedCbOperations = new EnumMap<>(OperationType.class);
-        this.interruptions = interruptions;
         this.cpu = cpu;
+        this.interruptions = interruptions;
         loadOperations();
     }
 
@@ -162,7 +161,28 @@ public class OperationsLoader {
 
         if ("STOP".equals(mnemonic)) {
             return (registers, memory, operands) -> {
-                // STOP instruction - handled in CPU for speed switching
+                // STOP instruction - consume second byte (should be 0x00) and handle speed
+                // switching
+                byte secondByte = getImmediateByte(registers, memory);
+                if (secondByte != 0x00) {
+                    System.err.println(String.format("WARNING: STOP instruction with unexpected second byte: 0x%02X",
+                            secondByte & 0xFF));
+                }
+
+                // Handle speed switching (moved from CPU special handling)
+                if (cpu != null && cpu.isPrepareSpeedSwitch()) {
+                    // Switch speed mode
+                    cpu.setDoubleSpeedMode(!cpu.isDoubleSpeedMode());
+                    cpu.setPrepareSpeedSwitch(false); // Clear prepare bit
+
+                    // Reset DIV register when switching speeds
+                    memory.writeByte(0xFF04, (byte) 0x00);
+
+                    // Adjust timers for new speed mode
+                    // Reset TIMA to TMA value when switching speeds
+                    int tma = memory.readByte(0xFF06) & 0xFF;
+                    memory.writeByte(0xFF05, (byte) tma);
+                }
             };
         }
 
@@ -216,7 +236,10 @@ public class OperationsLoader {
 
         if ("HALT".equals(mnemonic)) {
             return (registers, memory, operands) -> {
-                // HALT - no-op in emulator
+                if (!cpu.isIme() && interruptions.hasPendingInterrupt()) {
+                    cpu.setHaltBugTriggered(true);
+                }
+                cpu.setHalted(true);
             };
         }
 
@@ -224,8 +247,23 @@ public class OperationsLoader {
             return createRstExecutor();
         }
 
+        if ("INVALID".equals(mnemonic)) {
+            return (registers, memory, operands) -> {
+                // INVALID opcodes hard-lock the CPU - we'll just warn and advance PC
+                System.err.println(String.format("WARNING: Invalid opcode executed at PC=0x%04X",
+                        (int) registers.getPC()));
+                // Just advance PC to prevent infinite loop
+                registers.incrementPC();
+            };
+        }
+
         // Default executor for unimplemented operations
         return (registers, memory, operands) -> {
+            // FIXME: Better handling of unimplemented operations
+            // Currently just consumes bytes but doesn't advance properly
+            System.err.println(String.format("WARNING: Unimplemented operation: %s at PC=0x%04X",
+                    operation.getMnemonic(), (int) registers.getPC()));
+
             // Default executor - just consume the correct number of bytes
             if (operation.getBytes() > 1) {
                 // Skip immediate operands
@@ -233,7 +271,10 @@ public class OperationsLoader {
                     registers.incrementPC();
                 }
             }
-            System.out.println("Warning: Unimplemented operation: " + operation.getMnemonic());
+            // For unimplemented operations, at least advance PC by 1 if no operands
+            if (operation.getBytes() == 1) {
+                registers.incrementPC();
+            }
         };
     }
 
@@ -319,8 +360,32 @@ public class OperationsLoader {
             }
         }
 
-        // Handle 16-bit register pairs
-        if (is16BitRegister(name)) {
+        // Handle memory access through registers
+        if (isMemory != null && isMemory) {
+            if ("HL".equals(name)) {
+                return memory.readByte(registers.getHL()) & 0xFF;
+            }
+            if ("HL+".equals(name)) {
+                int value = memory.readByte(registers.getHL()) & 0xFF;
+                registers.setHL(registers.getHL() + 1);
+                return value;
+            }
+            if ("HL-".equals(name)) {
+                int value = memory.readByte(registers.getHL()) & 0xFF;
+                registers.setHL(registers.getHL() - 1);
+                return value;
+            }
+            if ("BC".equals(name)) {
+                return memory.readByte(registers.getBC()) & 0xFF;
+            }
+            if ("DE".equals(name)) {
+                return memory.readByte(registers.getDE()) & 0xFF;
+            }
+            // Add other memory access patterns as needed
+        }
+
+        // Handle 16-bit register pairs - these should return the register pair value
+        if (is16BitRegister(name) && (isMemory == null || !isMemory)) {
             return switch (name) {
                 case "BC" -> registers.getBC() & 0xFFFF;
                 case "DE" -> registers.getDE() & 0xFFFF;
@@ -331,20 +396,21 @@ public class OperationsLoader {
             };
         }
 
-        // Handle memory access through registers
-        if (isMemory != null && isMemory) {
-            if ("HL".equals(name)) {
-                return memory.readByte(registers.getHL()) & 0xFF;
-            }
-            // Add other memory access patterns as needed
-        }
         // Fallback: if HL and not immediate, assume memory access
         else if ("HL".equals(name) && isImmediate != null && !isImmediate) {
             return memory.readByte(registers.getHL()) & 0xFF;
         }
 
-        // Handle register access
-        return registers.getRegister(name) & 0xFF;
+        // Handle single 8-bit register access only (not 16-bit register pairs)
+        if (!is16BitRegister(name) && !"a8".equals(name) && !"a16".equals(name) && !"d8".equals(name)
+                && !"d16".equals(name) && !"r8".equals(name)) {
+            return registers.getRegister(name) & 0xFF;
+        }
+
+        // Default fallback for unhandled cases
+        System.err.println("Unhandled operand in readMemoryOrRegister: " + name + " immediate=" + isImmediate
+                + " memory=" + isMemory);
+        return 0;
     }
 
     private void writeMemoryOrRegister(Registers registers, Memory memory, Map<String, Object> operand, int value) {
@@ -364,6 +430,30 @@ public class OperationsLoader {
                 memory.writeByte(registers.getHL(), (byte) value);
                 return;
             }
+            if ("HL+".equals(name)) {
+                memory.writeByte(registers.getHL(), (byte) value);
+                registers.setHL(registers.getHL() + 1);
+                return;
+            }
+            if ("HL-".equals(name)) {
+                memory.writeByte(registers.getHL(), (byte) value);
+                registers.setHL(registers.getHL() - 1);
+                return;
+            }
+            if ("BC".equals(name)) {
+                memory.writeByte(registers.getBC(), (byte) value);
+                return;
+            }
+            if ("DE".equals(name)) {
+                memory.writeByte(registers.getDE(), (byte) value);
+                return;
+            }
+            if ("a16".equals(name)) {
+                // For a16 memory writes, the address was already consumed during execution
+                // This should have been handled by the operation executor
+                System.err.println("Warning: a16 memory write should be handled by operation executor");
+                return;
+            }
             // Add other memory access patterns as needed
         }
         // Fallback: if HL and not immediate, assume memory access
@@ -378,8 +468,15 @@ public class OperationsLoader {
             return;
         }
 
-        // Handle register access
-        registers.setRegister(name, (byte) value);
+        // Handle single 8-bit register access only (not 16-bit register pairs or
+        // immediates)
+        if (!is16BitRegister(name) && !"a8".equals(name) && !"a16".equals(name) && !"d8".equals(name)
+                && !"d16".equals(name) && !"r8".equals(name)) {
+            registers.setRegister(name, (byte) value);
+        } else {
+            System.err.println("Unhandled operand in writeMemoryOrRegister: " + name + " immediate=" + isImmediate
+                    + " memory=" + isMemory);
+        }
     }
 
     // Executor factories for different operation categories
@@ -431,8 +528,8 @@ public class OperationsLoader {
             String srcReg = (String) srcOp.get("name");
 
             // Handle 16-bit ADD HL, ss
-            if ("HL".equals(destReg) && destOp.get("immediate") != null && (Boolean) destOp.get("immediate") &&
-                    srcOp.get("immediate") != null && (Boolean) srcOp.get("immediate") &&
+            if ("HL".equals(destReg) && destOp.get("immediate") != null && !(Boolean) destOp.get("immediate") &&
+                    srcOp.get("immediate") != null && !(Boolean) srcOp.get("immediate") &&
                     ("BC".equals(srcReg) || "DE".equals(srcReg) || "HL".equals(srcReg) || "SP".equals(srcReg))) {
 
                 int hl = registers.getHL();
@@ -450,8 +547,6 @@ public class OperationsLoader {
                 registers.setHL(result);
 
                 // Flags: Z unaffected, N=0, H: carry from bit 11, C: carry from bit 15
-                byte flags = registers.getRegister("F");
-                flags &= 0xBF; // N = 0
                 setHFlag(registers, ((hlVal & 0x0FFF) + (srcVal & 0x0FFF)) > 0x0FFF);
                 setCFlag(registers, sum > 0xFFFF);
                 return;
@@ -697,11 +792,14 @@ public class OperationsLoader {
 
             Map<String, Object> destOp = operands.get(0);
             String destReg = (String) destOp.get("name");
-            boolean isImmediate = destOp.get("immediate") != null && (Boolean) destOp.get("immediate");
+            Boolean isMemory = (Boolean) destOp.get("memory");
+            Boolean isImmediate = (Boolean) destOp.get("immediate");
 
             byte value;
-            // INC (HL)
-            if (!isImmediate && "HL".equals(destReg)) {
+            // INC (HL) - check for memory access (either explicit memory flag or HL
+            // fallback)
+            if ((isMemory != null && isMemory && "HL".equals(destReg)) ||
+                    (isMemory == null && "HL".equals(destReg) && isImmediate != null && !isImmediate)) {
                 value = (byte) memory.readByte(registers.getHL());
                 int result = (value & 0xFF) + 1;
                 byte resultByte = (byte) (result & 0xFF);
@@ -712,8 +810,7 @@ public class OperationsLoader {
                 setHFlag(registers, ((value & 0x0F) + 1) > 0x0F);
             }
             // INC 16-bit register pair
-            else if (isImmediate && ("BC".equals(destReg) || "DE".equals(destReg) || "HL".equals(destReg)
-                    || "SP".equals(destReg))) {
+            else if (is16BitRegister(destReg)) {
                 int val;
                 switch (destReg) {
                     case "BC": {
@@ -768,11 +865,14 @@ public class OperationsLoader {
 
             Map<String, Object> destOp = operands.get(0);
             String destReg = (String) destOp.get("name");
-            boolean isImmediate = destOp.get("immediate") != null && (Boolean) destOp.get("immediate");
+            Boolean isMemory = (Boolean) destOp.get("memory");
+            Boolean isImmediate = (Boolean) destOp.get("immediate");
 
             byte value;
-            // DEC (HL)
-            if (!isImmediate && "HL".equals(destReg)) {
+            // DEC (HL) - check for memory access (either explicit memory flag or HL
+            // fallback)
+            if ((isMemory != null && isMemory && "HL".equals(destReg)) ||
+                    (isMemory == null && "HL".equals(destReg) && isImmediate != null && !isImmediate)) {
                 value = (byte) memory.readByte(registers.getHL());
                 int result = (value & 0xff) - 1;
                 byte resultByte = (byte) (result & 0xff);
@@ -783,8 +883,7 @@ public class OperationsLoader {
                 setHFlag(registers, ((value & 0x0F) - 1) < 0);
             }
             // DEC 16-bit register pair
-            else if (isImmediate && ("BC".equals(destReg) || "DE".equals(destReg) || "HL".equals(destReg)
-                    || "SP".equals(destReg))) {
+            else if (is16BitRegister(destReg)) {
                 int val;
                 switch (destReg) {
                     case "BC": {
@@ -840,6 +939,45 @@ public class OperationsLoader {
                 String destName = (String) dest.get("name");
                 String srcName = (String) src.get("name");
 
+                // Handle special cases first
+
+                // LD (a16), SP - Store SP at immediate 16-bit address
+                if ("a16".equals(destName) && "SP".equals(srcName)) {
+                    int address = getImmediateChar(registers, memory);
+                    memory.writeChar(address, registers.getSP());
+                    return;
+                }
+
+                // LD (a16), A - Store A at immediate 16-bit address
+                if ("a16".equals(destName) && "A".equals(srcName)) {
+                    int address = getImmediateChar(registers, memory);
+                    memory.writeByte(address, registers.getRegister("A"));
+                    return;
+                }
+
+                // LD A, (a16) - Load A from immediate 16-bit address
+                if ("A".equals(destName) && "a16".equals(srcName)) {
+                    int address = getImmediateChar(registers, memory);
+                    byte value = (byte) memory.readByte(address);
+                    registers.setRegister("A", value);
+                    return;
+                }
+
+                // LD HL, SP+r8 - Load HL with SP plus signed 8-bit immediate
+                if ("HL".equals(destName) && "SP+r8".equals(srcName)) {
+                    byte offset = getImmediateByte(registers, memory);
+                    int spVal = registers.getSP() & 0xFFFF;
+                    int sOffset = (byte) offset; // sign-extend
+                    int result = (spVal + sOffset) & 0xFFFF;
+
+                    // Flags: Z=0, N=0, H and C from lower 8/4 bits of addition
+                    setFlags(registers, false, false,
+                            ((spVal & 0x0F) + (sOffset & 0x0F)) > 0x0F,
+                            ((spVal & 0xFF) + (sOffset & 0xFF)) > 0xFF);
+                    registers.setHL((char) result);
+                    return;
+                }
+
                 // Handle 16-bit loads (LD rr, d16)
                 if (is16BitRegister(destName) && "d16".equals(srcName)) {
                     int value = getImmediateChar(registers, memory);
@@ -876,6 +1014,20 @@ public class OperationsLoader {
                     byte value = registers.getRegister("A");
                     memory.writeByte(address, value);
                 }
+                // LDH A, (C) - Load from high memory using C register
+                else if ("A".equals(destName) && "C".equals(srcName)) {
+                    byte offset = registers.getRegister("C");
+                    int address = 0xFF00 + (offset & 0xFF);
+                    byte value = (byte) memory.readByte(address);
+                    registers.setRegister("A", value);
+                }
+                // LDH (C), A - Store to high memory using C register
+                else if ("C".equals(destName) && "A".equals(srcName)) {
+                    byte offset = registers.getRegister("C");
+                    int address = 0xFF00 + (offset & 0xFF);
+                    byte value = registers.getRegister("A");
+                    memory.writeByte(address, value);
+                }
             }
         };
     }
@@ -884,19 +1036,19 @@ public class OperationsLoader {
         return (registers, memory, operands) -> {
             if (operands.size() >= 1) {
                 boolean condition = true;
-                int operandIndex = 0;
 
                 // Check for conditional jump
                 if (operands.size() == 2) {
                     String conditionName = (String) operands.get(0).get("name");
                     condition = checkCondition(registers, conditionName);
-                    operandIndex = 1;
                 }
-
+                // Always read immediate 16-bit address to advance PC correctly
+                int address = readMemoryOrRegister(registers, memory, operands.get(operands.size() - 1));
                 if (condition) {
-                    int address = readMemoryOrRegister(registers, memory, operands.get(operandIndex));
                     registers.setPC(address);
                 }
+                if (cpu != null)
+                    cpu.setLastConditionTaken(condition && operands.size() == 2);
             }
         };
     }
@@ -905,20 +1057,20 @@ public class OperationsLoader {
         return (registers, memory, operands) -> {
             if (operands.size() >= 1) {
                 boolean condition = true;
-                int operandIndex = 0;
 
                 // Check for conditional jump
                 if (operands.size() == 2) {
                     String conditionName = (String) operands.get(0).get("name");
                     condition = checkCondition(registers, conditionName);
-                    operandIndex = 1;
                 }
-
+                // Always fetch immediate signed offset
+                int offset = getImmediateByte(registers, memory);
                 if (condition) {
-                    int offset = getImmediateByte(registers, memory);
                     int newPC = registers.getPC() + (byte) offset;
                     registers.setPC(newPC);
                 }
+                if (cpu != null)
+                    cpu.setLastConditionTaken(condition && operands.size() == 2);
             }
         };
     }
@@ -935,14 +1087,16 @@ public class OperationsLoader {
                     condition = checkCondition(registers, conditionName);
                     operandIndex = 1;
                 }
-
+                // Always read immediate address (advances PC) then decide
+                int address = readMemoryOrRegister(registers, memory, operands.get(operandIndex));
                 if (condition) {
-                    int address = readMemoryOrRegister(registers, memory, operands.get(operandIndex));
                     int returnAddress = registers.getPC();
                     registers.setSP(registers.getSP() - 2);
                     memory.writeChar(registers.getSP(), returnAddress);
                     registers.setPC(address);
                 }
+                if (cpu != null)
+                    cpu.setLastConditionTaken(condition && operands.size() == 2);
             }
         };
     }
@@ -956,12 +1110,13 @@ public class OperationsLoader {
                 String conditionName = (String) operands.get(0).get("name");
                 condition = checkCondition(registers, conditionName);
             }
-
             if (condition) {
                 int returnAddress = memory.readChar(registers.getSP());
                 registers.setSP(registers.getSP() + 2);
                 registers.setPC(returnAddress);
             }
+            if (cpu != null)
+                cpu.setLastConditionTaken(condition && operands.size() == 1);
         };
     }
 
@@ -981,7 +1136,8 @@ public class OperationsLoader {
     private OperationExecutor createRstExecutor() {
         return (registers, memory, operands) -> {
             if (operands.size() == 1) {
-                int address = readMemoryOrRegister(registers, memory, operands.get(0));
+                String addressStr = (String) operands.get(0).get("name");
+                int address = Integer.parseInt(addressStr.substring(0, addressStr.length() - 1), 16);
                 int returnAddress = registers.getPC();
                 registers.setSP(registers.getSP() - 2);
                 memory.writeChar(registers.getSP(), returnAddress);

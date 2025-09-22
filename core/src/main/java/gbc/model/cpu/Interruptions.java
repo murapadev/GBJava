@@ -28,13 +28,16 @@ public class Interruptions {
         memory.writeByte(ADDR_INTERRUPT_FLAG, currentFlags);
     }
 
-    public void handleInterrupts() {
+    public boolean handleInterrupts() {
+        if (cpu.isHaltBugTriggered()) {
+            return false;
+        }
         byte interruptFlag = (byte) memory.readByte(ADDR_INTERRUPT_FLAG);
         byte interruptEnable = (byte) memory.readByte(ADDR_INTERRUPT_ENABLE);
 
         byte interruptFired = (byte) (interruptFlag & interruptEnable);
         if (interruptFired == 0) {
-            return;
+            return false;
         }
 
         // Service the first interrupt that's fired
@@ -49,6 +52,7 @@ public class Interruptions {
         } else if ((interruptFired & INTERRUPT_JOYPAD) != 0) {
             serviceInterrupt(INTERRUPT_JOYPAD, 0x0060);
         }
+        return true;
     }
 
     private void serviceInterrupt(byte interrupt, int handlerAddress) {
@@ -74,5 +78,11 @@ public class Interruptions {
     }
 
     public void reset() {
+    }
+
+    public boolean hasPendingInterrupt() {
+        byte interruptFlag = (byte) memory.readByte(ADDR_INTERRUPT_FLAG);
+        byte interruptEnable = (byte) memory.readByte(ADDR_INTERRUPT_ENABLE);
+        return (interruptFlag & interruptEnable) != 0;
     }
 }
