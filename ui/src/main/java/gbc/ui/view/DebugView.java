@@ -1,4 +1,4 @@
-package gbc.view;
+package gbc.ui.view;
 
 import gbc.model.GameBoyColor;
 import gbc.model.memory.Memory;
@@ -307,6 +307,11 @@ public class DebugView extends JFrame {
         }
 
         public void refresh() {
+            if (!isCartridgeLoaded()) {
+                disassemblyArea.setText("No cartridge loaded.\nPlease load a ROM file to view disassembly.");
+                return;
+            }
+
             currentPC = cpu.getRegisters().getPC();
             StringBuilder sb = new StringBuilder();
 
@@ -338,6 +343,10 @@ public class DebugView extends JFrame {
                     // Ignore
                 }
             });
+        }
+
+        private boolean isCartridgeLoaded() {
+            return memory.isCartridgeLoaded();
         }
 
         private String disassembleInstruction(int address, int opcode) {
@@ -418,6 +427,11 @@ public class DebugView extends JFrame {
         }
 
         public void refresh() {
+            if (!isCartridgeLoaded()) {
+                registerArea.setText("No cartridge loaded.\nPlease load a ROM file to view registers.");
+                return;
+            }
+
             StringBuilder sb = new StringBuilder();
 
             // CPU Registers
@@ -465,6 +479,10 @@ public class DebugView extends JFrame {
                     memory.readByte(0xFF49) & 0xFF));
 
             registerArea.setText(sb.toString());
+        }
+
+        private boolean isCartridgeLoaded() {
+            return memory.isCartridgeLoaded();
         }
     }
 
@@ -637,6 +655,11 @@ public class DebugView extends JFrame {
         }
 
         private void searchHexValue(String hexText, StringBuilder results) {
+            if (!isCartridgeLoaded()) {
+                results.append("No cartridge loaded. Cannot search memory.\n");
+                return;
+            }
+
             try {
                 int searchValue = Integer.parseInt(hexText, 16) & 0xFF;
                 results.append(String.format("Searching for hex value: $%02X\n\n", searchValue));
@@ -666,6 +689,11 @@ public class DebugView extends JFrame {
         }
 
         private void searchTextValue(String text, StringBuilder results) {
+            if (!isCartridgeLoaded()) {
+                results.append("No cartridge loaded. Cannot search memory.\n");
+                return;
+            }
+
             results.append(String.format("Searching for text: \"%s\"\n\n", text));
 
             byte[] searchBytes = text.getBytes();
@@ -695,6 +723,10 @@ public class DebugView extends JFrame {
             } else {
                 results.append(String.format("\nTotal matches: %d\n", foundCount));
             }
+        }
+
+        private boolean isCartridgeLoaded() {
+            return memory.isCartridgeLoaded();
         }
     }
 }

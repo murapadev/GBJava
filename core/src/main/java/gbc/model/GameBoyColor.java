@@ -5,7 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 import gbc.model.cartridge.*;
-import gbc.model.controller.Controller;
+import gbc.core.input.Controller;
 import gbc.model.cpu.*;
 import gbc.model.memory.*;
 import gbc.model.graphics.*;
@@ -19,12 +19,15 @@ public class GameBoyColor {
 
 	private Controller input;
 
+	private boolean paused = false;
+	private float speedMultiplier = 1.0f;
+
 	public GameBoyColor() {
 		this.memory = new Memory();
 		this.cpu = new CPU(this.memory);
 		this.screen = new Screen();
 		this.ppu = new PPU(this.memory, this.screen);
-		this.input = new Controller(this.memory);
+		this.input = new Controller();
 
 		// Set up controller in memory and interruptions
 		this.memory.setController(this.input);
@@ -32,6 +35,9 @@ public class GameBoyColor {
 	}
 
 	public int executeCycle() {
+		if (paused) {
+			return 0; // Return 0 cycles when paused
+		}
 
 		int cycles = cpu.executeCycle();
 		ppu.step(cycles);
@@ -81,5 +87,25 @@ public class GameBoyColor {
 
 	public byte[] fetchAudioSamples() {
 		return memory.fetchAudioSamples();
+	}
+
+	public void pause() {
+		this.paused = true;
+	}
+
+	public void resume() {
+		this.paused = false;
+	}
+
+	public boolean isPaused() {
+		return this.paused;
+	}
+
+	public void setSpeedMultiplier(float multiplier) {
+		this.speedMultiplier = Math.max(0.25f, Math.min(4.0f, multiplier)); // Clamp between 0.25x and 4.0x
+	}
+
+	public float getSpeedMultiplier() {
+		return this.speedMultiplier;
 	}
 }

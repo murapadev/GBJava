@@ -1,4 +1,4 @@
-package gbc.view;
+package gbc.ui.view;
 
 import gbc.model.GameBoyColor;
 import gbc.model.graphics.Screen;
@@ -62,6 +62,18 @@ public class EmulatorView extends JPanel {
         setBackground(backgroundColor);
         setFocusable(true);
 
+        // Force initial rendering
+        SwingUtilities.invokeLater(() -> {
+            if (ppu != null) {
+                try {
+                    ppu.updateGraphics();
+                } catch (Exception e) {
+                    System.err.println("Error in initial PPU update: " + e.getMessage());
+                }
+            }
+            repaint();
+        });
+
         // Add resize listener to maintain aspect ratio
         addComponentListener(new ComponentAdapter() {
             @Override
@@ -92,7 +104,12 @@ public class EmulatorView extends JPanel {
         g2d.setColor(backgroundColor);
         g2d.fillRect(0, 0, getWidth(), getHeight());
 
-        BufferedImage image = screen.getImage();
+        // Always try to get an image from screen
+        BufferedImage image = null;
+        if (screen != null) {
+            image = screen.getImage();
+        }
+
         if (image != null) {
             // Apply color filter
             BufferedImage filteredImage = applyColorFilter(image);
@@ -114,17 +131,43 @@ public class EmulatorView extends JPanel {
             g2d.setColor(Color.GRAY);
             g2d.drawRect(x - 1, y - 1, displaySize.width + 1, displaySize.height + 1);
         } else {
-            // Show "No Signal" message when no image is available
-            g2d.setColor(Color.WHITE);
-            g2d.setFont(new Font("Arial", Font.BOLD, 24));
-            FontMetrics fm = g2d.getFontMetrics();
-            String message = "No Signal";
-            int messageX = (getWidth() - fm.stringWidth(message)) / 2;
-            int messageY = (getHeight() + fm.getAscent()) / 2;
-            g2d.drawString(message, messageX, messageY);
+            // Draw a test pattern when no image is available
+            drawTestPattern(g2d);
+        }
+        g2d.dispose();
+    }
+
+    private void drawTestPattern(Graphics2D g2d) {
+        // Draw a simple test pattern to show the view is working
+        int width = getWidth();
+        int height = getHeight();
+
+        // Draw checkerboard pattern
+        g2d.setColor(Color.DARK_GRAY);
+        for (int x = 0; x < width; x += 20) {
+            for (int y = 0; y < height; y += 20) {
+                if ((x / 20 + y / 20) % 2 == 0) {
+                    g2d.fillRect(x, y, 20, 20);
+                }
+            }
         }
 
-        g2d.dispose();
+        // Draw centered message
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.BOLD, 16));
+        FontMetrics fm = g2d.getFontMetrics();
+        String message = "Game Boy Color Emulator";
+        int messageX = (width - fm.stringWidth(message)) / 2;
+        int messageY = (height + fm.getAscent()) / 2;
+        g2d.drawString(message, messageX, messageY);
+
+        // Debug info
+        g2d.setFont(new Font("Arial", Font.PLAIN, 12));
+        fm = g2d.getFontMetrics();
+        String debugInfo = String.format("Screen: %s, PPU: %s",
+                screen != null ? "OK" : "NULL",
+                ppu != null ? "OK" : "NULL");
+        g2d.drawString(debugInfo, 10, height - 20);
     }
 
     private BufferedImage applyColorFilter(BufferedImage original) {
@@ -257,9 +300,16 @@ public class EmulatorView extends JPanel {
     }
 
     public void update() {
-        if (ppu != null) {
-            ppu.updateGraphics();
+        // Simplified update - just trigger PPU update and repaint
+        try {
+            if (ppu != null) {
+                ppu.updateGraphics();
+            }
+        } catch (Exception e) {
+            System.err.println("Error updating PPU: " + e.getMessage());
         }
+
+        // Simple repaint - no threading complexity
         repaint();
     }
 

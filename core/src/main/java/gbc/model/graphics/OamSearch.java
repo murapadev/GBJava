@@ -25,7 +25,9 @@ public class OamSearch {
         }
 
         int spriteCount = 0;
-        int spriteHeight = 8; // TODO: Get from LCDC register
+        // Read LCDC register (0xFF40) to determine sprite height
+        int lcdc = memory.readByte(0xFF40) & 0xFF;
+        int spriteHeight = (lcdc & 0x04) != 0 ? 16 : 8; // Bit 2: 0=8x8, 1=8x16
 
         // Search through all 40 sprites in OAM
         for (int i = 0; i < 40 && spriteCount < 10; i++) {

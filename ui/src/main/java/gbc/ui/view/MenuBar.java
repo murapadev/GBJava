@@ -1,7 +1,10 @@
-package gbc.view;
+package gbc.ui.view;
 
 import gbc.model.GameBoyColor;
-import gbc.view.EmulatorView.ColorFilter;
+import gbc.model.cpu.Registers;
+import gbc.model.memory.Memory;
+import gbc.ui.controller.EmulatorController;
+import gbc.ui.view.EmulatorView.ColorFilter;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -9,6 +12,11 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /**
  * MenuBar with comprehensive emulation controls and graphics options
@@ -19,6 +27,12 @@ public class MenuBar extends JMenuBar {
     private final DebugView debugView;
     private final VRAMViewer vramViewer;
     private final EmulatorView emulatorView;
+    private EmulatorController controller;
+
+    // Recent ROMs functionality
+    private static final int MAX_RECENT_ROMS = 10;
+    private final List<File> recentROMs;
+    private JMenu recentMenu;
 
     // Graphics options dialog
     private GraphicsOptionsDialog graphicsDialog;
@@ -29,9 +43,14 @@ public class MenuBar extends JMenuBar {
         this.debugView = debugView;
         this.vramViewer = vramViewer;
         this.emulatorView = emulatorView;
+        this.recentROMs = new ArrayList<>();
         this.graphicsDialog = new GraphicsOptionsDialog();
 
         initializeMenus();
+    }
+
+    public void setController(EmulatorController controller) {
+        this.controller = controller;
     }
 
     private void initializeMenus() {
@@ -54,9 +73,9 @@ public class MenuBar extends JMenuBar {
         openItem.addActionListener(this::openFile);
 
         // Recent ROMs submenu
-        JMenu recentMenu = new JMenu("Recent ROMs");
+        recentMenu = new JMenu("Recent ROMs");
         recentMenu.setMnemonic(KeyEvent.VK_R);
-        // TODO: Implement recent ROMs functionality
+        updateRecentROMsMenu();
 
         // Save/Load States
         JMenuItem saveStateItem = new JMenuItem("Save State...");
@@ -273,55 +292,107 @@ public class MenuBar extends JMenuBar {
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
-            try {
-                loadROM(selectedFile);
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this,
-                        "Error loading ROM:\n" + ex.getMessage(),
-                        "Load Error",
-                        JOptionPane.ERROR_MESSAGE);
-            }
+            loadROM(selectedFile).whenComplete((unused, throwable) -> SwingUtilities.invokeLater(() -> {
+                if (throwable == null) {
+                    addRecentROM(selectedFile);
+                    JOptionPane.showMessageDialog(this,
+                            "ROM loaded successfully:\n" + selectedFile.getName(),
+                            "ROM Loaded",
+                            JOptionPane.INFORMATION_MESSAGE);
+                    if (controller == null) {
+                        emulatorView.repaint();
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Error loading ROM:\n" + describeError(throwable),
+                            "Load Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }));
         }
     }
 
-    private void loadROM(File file) {
-        try {
-            // Get the parent window
-            Window window = SwingUtilities.getWindowAncestor(this);
-            if (window instanceof JFrame) {
-                JFrame frame = (JFrame) window;
-                if (frame.getTitle().contains("EmulatorWindow")) {
-                    // Use reflection or direct access to call EmulatorWindow.loadROM
-                    // For now, just use the GBC directly
-                    gbc.insertCartridge(file.getAbsolutePath());
-                }
-            } else {
-                gbc.insertCartridge(file.getAbsolutePath());
-            }
-
-            JOptionPane.showMessageDialog(this,
-                    "ROM loaded successfully:\n" + file.getName(),
-                    "ROM Loaded",
-                    JOptionPane.INFORMATION_MESSAGE);
-
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Error loading ROM:\n" + ex.getMessage(),
-                    "Load Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
+    private CompletableFuture<Void> loadROM(File file) {
+        setBusyCursor(true);
+        return submitRomLoad(file).whenComplete((unused, throwable) -> SwingUtilities.invokeLater(() -> setBusyCursor(false)));
     }
 
     private void saveState(ActionEvent e) {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Save State");
-        fileChooser.setSelectedFile(new File("savestate.sav"));
+        fileChooser.setSelectedFile(new File("game_state.sav"));
 
         int result = fileChooser.showSaveDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
-            // TODO: Implement save state functionality
-            JOptionPane.showMessageDialog(this, "Save state functionality not yet implemented", "Info",
-                    JOptionPane.INFORMATION_MESSAGE);
+            try {
+                File selectedFile = fileChooser.getSelectedFile();
+
+                // Create save state data
+                StringBuilder saveData = new StringBuilder();
+                saveData.append("# Game Boy Color Emulator Save State\n");
+                saveData.append("# Version: 1.0\n");
+                saveData.append("# Timestamp: ").append(System.currentTimeMillis()).append("\n\n");
+
+                // Save CPU registers
+                saveData.append("[CPU_REGISTERS]\n");
+                Registers regs = gbc.getCpu().getRegisters();
+                saveData.append("A=").append(regs.getRegister("A") & 0xFF).append("\n");
+                saveData.append("B=").append(regs.getRegister("B") & 0xFF).append("\n");
+                saveData.append("C=").append(regs.getRegister("C") & 0xFF).append("\n");
+                saveData.append("D=").append(regs.getRegister("D") & 0xFF).append("\n");
+                saveData.append("E=").append(regs.getRegister("E") & 0xFF).append("\n");
+                saveData.append("F=").append(regs.getRegister("F") & 0xFF).append("\n");
+                saveData.append("H=").append(regs.getRegister("H") & 0xFF).append("\n");
+                saveData.append("L=").append(regs.getRegister("L") & 0xFF).append("\n");
+                saveData.append("PC=").append(regs.getPC() & 0xFFFF).append("\n");
+                saveData.append("SP=").append(regs.getSP() & 0xFFFF).append("\n\n");
+
+                // Save key memory regions (VRAM, WRAM, HRAM)
+                saveData.append("[MEMORY]\n");
+                Memory memory = gbc.getMemory();
+
+                // Save VRAM (0x8000-0x9FFF)
+                saveData.append("VRAM=");
+                for (int addr = 0x8000; addr <= 0x9FFF; addr++) {
+                    saveData.append(String.format("%02X", memory.readByte(addr) & 0xFF));
+                }
+                saveData.append("\n");
+
+                // Save WRAM (0xC000-0xDFFF)
+                saveData.append("WRAM=");
+                for (int addr = 0xC000; addr <= 0xDFFF; addr++) {
+                    saveData.append(String.format("%02X", memory.readByte(addr) & 0xFF));
+                }
+                saveData.append("\n");
+
+                // Save HRAM (0xFF80-0xFFFE)
+                saveData.append("HRAM=");
+                for (int addr = 0xFF80; addr <= 0xFFFE; addr++) {
+                    saveData.append(String.format("%02X", memory.readByte(addr) & 0xFF));
+                }
+                saveData.append("\n");
+
+                // Save I/O registers (0xFF00-0xFF7F, excluding sound registers for simplicity)
+                saveData.append("IO=");
+                for (int addr = 0xFF00; addr <= 0xFF7F; addr++) {
+                    if (addr < 0xFF10 || addr > 0xFF3F) { // Skip sound registers
+                        saveData.append(String.format("%02X", memory.readByte(addr) & 0xFF));
+                    } else {
+                        saveData.append("00"); // Placeholder for sound registers
+                    }
+                }
+                saveData.append("\n\n");
+
+                // Write to file
+                Files.write(selectedFile.toPath(), saveData.toString().getBytes());
+
+                JOptionPane.showMessageDialog(this, "State saved successfully to: " + selectedFile.getName(),
+                        "Save State", JOptionPane.INFORMATION_MESSAGE);
+
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Error saving state: " + ex.getMessage(),
+                        "Save Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
@@ -331,9 +402,98 @@ public class MenuBar extends JMenuBar {
 
         int result = fileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
-            // TODO: Implement load state functionality
-            JOptionPane.showMessageDialog(this, "Load state functionality not yet implemented", "Info",
-                    JOptionPane.INFORMATION_MESSAGE);
+            try {
+                File selectedFile = fileChooser.getSelectedFile();
+
+                // Read save state data
+                String saveData = Files.readString(selectedFile.toPath());
+                String[] lines = saveData.split("\n");
+
+                Registers regs = gbc.getCpu().getRegisters();
+                Memory memory = gbc.getMemory();
+
+                boolean inCpuSection = false;
+                boolean inMemorySection = false;
+
+                for (String line : lines) {
+                    line = line.trim();
+
+                    if (line.isEmpty() || line.startsWith("#")) {
+                        continue;
+                    }
+
+                    if (line.equals("[CPU_REGISTERS]")) {
+                        inCpuSection = true;
+                        inMemorySection = false;
+                        continue;
+                    } else if (line.equals("[MEMORY]")) {
+                        inCpuSection = false;
+                        inMemorySection = true;
+                        continue;
+                    }
+
+                    if (inCpuSection) {
+                        // Parse CPU register data
+                        if (line.startsWith("A=")) {
+                            regs.setRegister("A", (byte) Integer.parseInt(line.substring(2), 16));
+                        } else if (line.startsWith("B=")) {
+                            regs.setRegister("B", (byte) Integer.parseInt(line.substring(2), 16));
+                        } else if (line.startsWith("C=")) {
+                            regs.setRegister("C", (byte) Integer.parseInt(line.substring(2), 16));
+                        } else if (line.startsWith("D=")) {
+                            regs.setRegister("D", (byte) Integer.parseInt(line.substring(2), 16));
+                        } else if (line.startsWith("E=")) {
+                            regs.setRegister("E", (byte) Integer.parseInt(line.substring(2), 16));
+                        } else if (line.startsWith("F=")) {
+                            regs.setRegister("F", (byte) Integer.parseInt(line.substring(2), 16));
+                        } else if (line.startsWith("H=")) {
+                            regs.setRegister("H", (byte) Integer.parseInt(line.substring(2), 16));
+                        } else if (line.startsWith("L=")) {
+                            regs.setRegister("L", (byte) Integer.parseInt(line.substring(2), 16));
+                        } else if (line.startsWith("PC=")) {
+                            regs.setPC(Integer.parseInt(line.substring(3), 16));
+                        } else if (line.startsWith("SP=")) {
+                            regs.setSP(Integer.parseInt(line.substring(3), 16));
+                        }
+                    } else if (inMemorySection) {
+                        // Parse memory data
+                        if (line.startsWith("VRAM=")) {
+                            String vramData = line.substring(5);
+                            for (int i = 0; i < vramData.length() / 2 && (0x8000 + i) <= 0x9FFF; i++) {
+                                int value = Integer.parseInt(vramData.substring(i * 2, i * 2 + 2), 16);
+                                memory.writeByte(0x8000 + i, (byte) value);
+                            }
+                        } else if (line.startsWith("WRAM=")) {
+                            String wramData = line.substring(5);
+                            for (int i = 0; i < wramData.length() / 2 && (0xC000 + i) <= 0xDFFF; i++) {
+                                int value = Integer.parseInt(wramData.substring(i * 2, i * 2 + 2), 16);
+                                memory.writeByte(0xC000 + i, (byte) value);
+                            }
+                        } else if (line.startsWith("HRAM=")) {
+                            String hramData = line.substring(5);
+                            for (int i = 0; i < hramData.length() / 2 && (0xFF80 + i) <= 0xFFFE; i++) {
+                                int value = Integer.parseInt(hramData.substring(i * 2, i * 2 + 2), 16);
+                                memory.writeByte(0xFF80 + i, (byte) value);
+                            }
+                        } else if (line.startsWith("IO=")) {
+                            String ioData = line.substring(3);
+                            for (int i = 0; i < ioData.length() / 2 && (0xFF00 + i) <= 0xFF7F; i++) {
+                                if (0xFF00 + i < 0xFF10 || 0xFF00 + i > 0xFF3F) { // Skip sound registers
+                                    int value = Integer.parseInt(ioData.substring(i * 2, i * 2 + 2), 16);
+                                    memory.writeByte(0xFF00 + i, (byte) value);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                JOptionPane.showMessageDialog(this, "State loaded successfully from: " + selectedFile.getName(),
+                        "Load State", JOptionPane.INFORMATION_MESSAGE);
+
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Error loading state: " + ex.getMessage(),
+                        "Load Error", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
@@ -350,20 +510,42 @@ public class MenuBar extends JMenuBar {
     }
 
     private void togglePause(ActionEvent e) {
-        // TODO: Implement pause/resume functionality
-        JOptionPane.showMessageDialog(this, "Pause/Resume functionality not yet fully implemented", "Info",
-                JOptionPane.INFORMATION_MESSAGE);
+        if (controller != null) {
+            if (controller.isPaused()) {
+                controller.resume();
+                JOptionPane.showMessageDialog(this, "Emulator resumed!", "Resume", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                controller.pause();
+                JOptionPane.showMessageDialog(this, "Emulator paused!", "Pause", JOptionPane.INFORMATION_MESSAGE);
+            }
+        } else {
+            if (gbc.isPaused()) {
+                gbc.resume();
+                JOptionPane.showMessageDialog(this, "Emulator resumed!", "Resume", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                gbc.pause();
+                JOptionPane.showMessageDialog(this, "Emulator paused!", "Pause", JOptionPane.INFORMATION_MESSAGE);
+            }
+        }
     }
 
     private void resetEmulator(ActionEvent e) {
-        gbc.reset();
+        if (controller != null) {
+            controller.reset();
+        } else {
+            gbc.reset();
+        }
         JOptionPane.showMessageDialog(this, "Emulator reset successfully!", "Reset", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void setEmulationSpeed(float speed) {
-        // TODO: Implement speed control
-        JOptionPane.showMessageDialog(this, String.format("Speed set to %.0f%% (not yet implemented)", speed * 100),
-                "Speed", JOptionPane.INFORMATION_MESSAGE);
+        if (controller != null) {
+            controller.getGameBoyColor().setSpeedMultiplier(speed);
+        } else {
+            gbc.setSpeedMultiplier(speed);
+        }
+        JOptionPane.showMessageDialog(this, String.format("Emulation speed set to %.0f%%", speed * 100),
+                "Speed Control", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void toggleFullscreen(ActionEvent e) {
@@ -547,5 +729,115 @@ public class MenuBar extends JMenuBar {
             buttonPanel.add(closeButton);
             add(buttonPanel, BorderLayout.SOUTH);
         }
+    }
+
+    // Recent ROMs functionality
+    private void updateRecentROMsMenu() {
+        recentMenu.removeAll();
+
+        if (recentROMs.isEmpty()) {
+            JMenuItem noRecentItem = new JMenuItem("No recent ROMs");
+            noRecentItem.setEnabled(false);
+            recentMenu.add(noRecentItem);
+        } else {
+            for (int i = 0; i < recentROMs.size(); i++) {
+                File romFile = recentROMs.get(i);
+                String displayName = (i + 1) + ". " + romFile.getName();
+                JMenuItem romItem = new JMenuItem(displayName);
+                romItem.setToolTipText(romFile.getAbsolutePath());
+                romItem.addActionListener(e -> loadRecentROM(romFile));
+                recentMenu.add(romItem);
+            }
+
+            recentMenu.addSeparator();
+            JMenuItem clearItem = new JMenuItem("Clear Recent");
+            clearItem.addActionListener(e -> clearRecentROMs());
+            recentMenu.add(clearItem);
+        }
+    }
+
+    private void addRecentROM(File romFile) {
+        // Remove if already exists
+        recentROMs.removeIf(file -> file.getAbsolutePath().equals(romFile.getAbsolutePath()));
+
+        // Add to beginning of list
+        recentROMs.add(0, romFile);
+
+        // Keep only MAX_RECENT_ROMS items
+        while (recentROMs.size() > MAX_RECENT_ROMS) {
+            recentROMs.remove(recentROMs.size() - 1);
+        }
+
+        updateRecentROMsMenu();
+    }
+
+    private void loadRecentROM(File romFile) {
+        if (!romFile.exists()) {
+            JOptionPane.showMessageDialog(this,
+                    "ROM file not found:\n" + romFile.getAbsolutePath(),
+                    "File Not Found",
+                    JOptionPane.WARNING_MESSAGE);
+            recentROMs.remove(romFile);
+            updateRecentROMsMenu();
+            return;
+        }
+
+        loadROM(romFile).whenComplete((unused, throwable) -> SwingUtilities.invokeLater(() -> {
+            if (throwable == null) {
+                addRecentROM(romFile);
+                JOptionPane.showMessageDialog(this,
+                        "ROM loaded successfully:\n" + romFile.getName(),
+                        "ROM Loaded",
+                        JOptionPane.INFORMATION_MESSAGE);
+                if (controller == null) {
+                    emulatorView.repaint();
+                }
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Error loading ROM:\n" + describeError(throwable),
+                        "Load Error",
+                        JOptionPane.ERROR_MESSAGE);
+                recentROMs.remove(romFile);
+                updateRecentROMsMenu();
+            }
+        }));
+    }
+
+    private CompletableFuture<Void> submitRomLoad(File file) {
+        if (controller != null) {
+            return controller.loadRomAsync(file.getAbsolutePath());
+        }
+
+        return CompletableFuture.runAsync(() -> {
+            gbc.insertCartridge(file.getAbsolutePath());
+            gbc.reset();
+        });
+    }
+
+    private void setBusyCursor(boolean busy) {
+        Cursor cursor = Cursor.getPredefinedCursor(busy ? Cursor.WAIT_CURSOR : Cursor.DEFAULT_CURSOR);
+        Window window = SwingUtilities.getWindowAncestor(this);
+        if (window != null) {
+            window.setCursor(cursor);
+        } else {
+            setCursor(cursor);
+        }
+    }
+
+    private String describeError(Throwable throwable) {
+        Throwable cause = throwable instanceof CompletionException ? throwable.getCause() : throwable;
+        if (cause == null) {
+            return "Unknown error";
+        }
+        String message = cause.getMessage();
+        if (message == null || message.isBlank()) {
+            return cause.getClass().getSimpleName();
+        }
+        return message;
+    }
+
+    private void clearRecentROMs() {
+        recentROMs.clear();
+        updateRecentROMsMenu();
     }
 }

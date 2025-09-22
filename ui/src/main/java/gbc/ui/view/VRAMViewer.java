@@ -1,4 +1,4 @@
-package gbc.view;
+package gbc.ui.view;
 
 import gbc.model.GameBoyColor;
 import gbc.model.memory.Memory;
@@ -15,7 +15,6 @@ import java.awt.image.BufferedImage;
  */
 public class VRAMViewer extends JFrame {
 
-    private final GameBoyColor gbc;
     private final Memory memory;
 
     // Components
@@ -30,7 +29,6 @@ public class VRAMViewer extends JFrame {
     private JLabel tileInfoLabel;
 
     public VRAMViewer(GameBoyColor gbc) {
-        this.gbc = gbc;
         this.memory = gbc.getMemory();
 
         setTitle("VRAM Viewer");

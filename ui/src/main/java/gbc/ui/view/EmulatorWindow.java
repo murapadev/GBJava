@@ -1,7 +1,7 @@
-package gbc.view;
+package gbc.ui.view;
 
 import gbc.model.GameBoyColor;
-import gbc.controller.EmulatorController;
+import gbc.ui.controller.EmulatorController;
 
 import javax.swing.*;
 import java.awt.*;
@@ -9,6 +9,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /**
  * EmulatorWindow with improved graphics, debugging, and UI features
@@ -37,6 +39,7 @@ public class EmulatorWindow extends JFrame implements KeyListener {
     public EmulatorWindow(GameBoyColor gbc) {
         this.gbc = gbc;
 
+        // Initialize components first
         initializeComponents();
         setupLayout();
         setupEventHandlers();
@@ -44,21 +47,50 @@ public class EmulatorWindow extends JFrame implements KeyListener {
     }
 
     private void initializeComponents() {
-        // Create views
-        emulatorView = new EmulatorView(gbc);
-        debugView = new DebugView(gbc);
-        vramViewer = new VRAMViewer(gbc);
+        try {
+            // Create views
+            emulatorView = new EmulatorView(gbc);
 
-        // Create menu bar
-        menuBar = new MenuBar(gbc, debugView, vramViewer, emulatorView);
+            // Create simple debug views (may be null if classes don't exist)
+            try {
+                debugView = new DebugView(gbc);
+                debugView.setVisible(false);
+            } catch (Exception e) {
+                System.out.println("Debug view not available: " + e.getMessage());
+                debugView = null;
+            }
 
-        // Status components
-        statusLabel = new JLabel("Ready");
-        fpsLabel = new JLabel("FPS: --");
+            try {
+                vramViewer = new VRAMViewer(gbc);
+                vramViewer.setVisible(false);
+            } catch (Exception e) {
+                System.out.println("VRAM viewer not available: " + e.getMessage());
+                vramViewer = null;
+            }
 
-        // Initially hide debug windows
-        debugView.setVisible(false);
-        vramViewer.setVisible(false);
+            // Create menu bar
+            try {
+                menuBar = new MenuBar(gbc, debugView, vramViewer, emulatorView);
+            } catch (Exception e) {
+                System.out.println("Custom menu bar not available: " + e.getMessage());
+                // Create simple fallback - set to null and create simple JMenuBar
+                menuBar = null;
+            }
+
+            // Status components
+            statusLabel = new JLabel("Ready");
+            fpsLabel = new JLabel("FPS: --");
+
+        } catch (Exception e) {
+            System.err.println("Error initializing components: " + e.getMessage());
+            e.printStackTrace();
+
+            // Fallback: create minimal components
+            emulatorView = new EmulatorView(gbc);
+            statusLabel = new JLabel("Error initializing - using minimal UI");
+            fpsLabel = new JLabel("FPS: --");
+            menuBar = null;
+        }
     }
 
     private void setupLayout() {
@@ -67,8 +99,27 @@ public class EmulatorWindow extends JFrame implements KeyListener {
         // Main emulator view
         add(emulatorView, BorderLayout.CENTER);
 
-        // Menu bar
-        setJMenuBar(menuBar);
+        // Menu bar (if available, otherwise create simple one)
+        if (menuBar != null) {
+            setJMenuBar(menuBar);
+        } else {
+            // Create simple fallback menu bar
+            JMenuBar simpleMenuBar = new JMenuBar();
+            JMenu fileMenu = new JMenu("File");
+            JMenuItem exitItem = new JMenuItem("Exit");
+            exitItem.addActionListener(e -> System.exit(0));
+            fileMenu.add(exitItem);
+            simpleMenuBar.add(fileMenu);
+
+            JMenu helpMenu = new JMenu("Help");
+            JMenuItem aboutItem = new JMenuItem("About");
+            aboutItem.addActionListener(e -> JOptionPane.showMessageDialog(this,
+                    "Game Boy Color Emulator\nMinimal UI Mode", "About", JOptionPane.INFORMATION_MESSAGE));
+            helpMenu.add(aboutItem);
+            simpleMenuBar.add(helpMenu);
+
+            setJMenuBar(simpleMenuBar);
+        }
 
         // Status panel
         statusPanel = new JPanel(new BorderLayout());
@@ -114,63 +165,84 @@ public class EmulatorWindow extends JFrame implements KeyListener {
         // Set minimum size
         setMinimumSize(new Dimension(320, 288));
 
-        // Set icon (you could add a custom icon here)
-        // setIconImage(iconImage);
+        // Force initial update
+        SwingUtilities.invokeLater(() -> {
+            updateUI();
+            repaint();
+            revalidate();
+        });
 
         setVisible(true);
     }
 
     public void setController(EmulatorController controller) {
         this.controller = controller;
+        if (menuBar != null) {
+            menuBar.setController(controller);
+        }
     }
 
     public void update() {
-        if (emulatorView != null) {
-            emulatorView.update();
+        // Simple, thread-safe update
+        if (SwingUtilities.isEventDispatchThread()) {
+            updateUI();
+        } else {
+            SwingUtilities.invokeLater(this::updateUI);
         }
+    }
 
-        if (debugView != null && debugView.isVisible()) {
-            debugView.updateAllViews();
+    private void updateUI() {
+        try {
+            // Only update what's essential
+            if (emulatorView != null) {
+                emulatorView.repaint(); // Just repaint, don't call update
+            }
+
+            // Simple status update
+            updateStatus();
+
+        } catch (Exception e) {
+            System.err.println("Error updating UI: " + e.getMessage());
         }
+    }
 
-        if (vramViewer != null && vramViewer.isVisible()) {
-            vramViewer.refresh();
-        }
-
-        // Update status
-        SwingUtilities.invokeLater(() -> {
-            // Check if a cartridge is loaded by checking if ROM area has been initialized
-            try {
-                int romByte = gbc.getMemory().readByte(0x0134); // Read from ROM title area
-                if (romByte != 0) {
-                    // Try to read ROM title
-                    StringBuilder title = new StringBuilder();
-                    for (int i = 0x0134; i <= 0x0143; i++) {
-                        int b = gbc.getMemory().readByte(i) & 0xFF;
-                        if (b == 0)
-                            break;
-                        if (b >= 32 && b <= 126) { // Printable ASCII
-                            title.append((char) b);
-                        }
+    private void updateStatus() {
+        // Check if a cartridge is loaded by checking if ROM area has been initialized
+        try {
+            int romByte = gbc.getMemory().readByte(0x0134); // Read from ROM title area
+            if (romByte != 0) {
+                // Try to read ROM title
+                StringBuilder title = new StringBuilder();
+                for (int i = 0x0134; i <= 0x0143; i++) {
+                    int b = gbc.getMemory().readByte(i) & 0xFF;
+                    if (b == 0)
+                        break;
+                    if (b >= 32 && b <= 126) { // Printable ASCII
+                        title.append((char) b);
                     }
-                    if (title.length() > 0) {
-                        statusLabel.setText("ROM: " + title.toString().trim());
-                    } else {
-                        statusLabel.setText("ROM Loaded");
-                    }
-                } else {
-                    statusLabel.setText("No ROM loaded");
                 }
-            } catch (Exception e) {
+                if (title.length() > 0) {
+                    statusLabel.setText("ROM: " + title.toString().trim());
+                } else {
+                    statusLabel.setText("ROM Loaded");
+                }
+            } else {
                 statusLabel.setText("No ROM loaded");
             }
-        });
+        } catch (Exception e) {
+            statusLabel.setText("No ROM loaded");
+        }
     }
 
     public void updateFPS(double fps) {
-        SwingUtilities.invokeLater(() -> {
+        // Ensure FPS updates happen on EDT
+        if (SwingUtilities.isEventDispatchThread()) {
             fpsLabel.setText(String.format("FPS: %.1f", fps));
-        });
+        } else {
+            SwingUtilities.invokeLater(() -> {
+                fpsLabel.setText(String.format("FPS: %.1f", fps));
+            });
+        }
     }
 
     // Window management
@@ -223,21 +295,33 @@ public class EmulatorWindow extends JFrame implements KeyListener {
 
     // ROM management
     public void loadROM(java.io.File file) {
-        try {
-            if (controller != null) {
-                controller.loadRom(file.getAbsolutePath());
-            } else {
+        if (controller != null) {
+            controller.loadRomAsync(file.getAbsolutePath())
+                    .whenComplete((unused, throwable) -> SwingUtilities.invokeLater(() -> {
+                        if (throwable != null) {
+                            JOptionPane.showMessageDialog(this,
+                                    "Error loading ROM:\n" + describeError(throwable),
+                                    "Load Error",
+                                    JOptionPane.ERROR_MESSAGE);
+                        }
+                    }));
+        } else {
+            CompletableFuture.runAsync(() -> {
                 gbc.insertCartridge(file.getAbsolutePath());
-            }
-
-            // Update window title
-            setTitle("Game Boy Color Emulator - " + file.getName());
-
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Error loading ROM:\n" + ex.getMessage(),
-                    "Load Error",
-                    JOptionPane.ERROR_MESSAGE);
+                gbc.reset();
+            }).whenComplete((unused, throwable) -> SwingUtilities.invokeLater(() -> {
+                if (throwable == null) {
+                    setTitle("Game Boy Color Emulator - " + file.getName());
+                    if (emulatorView != null) {
+                        emulatorView.repaint();
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Error loading ROM:\n" + describeError(throwable),
+                            "Load Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }));
         }
     }
 
@@ -396,7 +480,12 @@ public class EmulatorWindow extends JFrame implements KeyListener {
     }
 
     public void setStatusText(String text) {
-        SwingUtilities.invokeLater(() -> statusLabel.setText(text));
+        // Ensure status updates happen on EDT
+        if (SwingUtilities.isEventDispatchThread()) {
+            statusLabel.setText(text);
+        } else {
+            SwingUtilities.invokeLater(() -> statusLabel.setText(text));
+        }
     }
 
     // Configuration
@@ -408,5 +497,17 @@ public class EmulatorWindow extends JFrame implements KeyListener {
     public void saveSettings() {
         // Save current settings
         // This could save to a properties file or registry
+    }
+
+    private String describeError(Throwable throwable) {
+        Throwable cause = throwable instanceof CompletionException ? throwable.getCause() : throwable;
+        if (cause == null) {
+            return "Unknown error";
+        }
+        String message = cause.getMessage();
+        if (message == null || message.isBlank()) {
+            return cause.getClass().getSimpleName();
+        }
+        return message;
     }
 }

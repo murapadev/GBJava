@@ -22,6 +22,22 @@ public class PPU {
         this.mode = 2; // Start in OAM mode
         this.modeClock = 0;
 
+        // FIXME: PPU registers (LCDC, STAT, LY, etc.) are not initialized with default
+        // values
+        // This causes renderFrame() to fail because LCDC returns 0 (LCD disabled)
+        // Need to initialize I/O registers in Memory class or add initPPURegisters()
+        // method
+
+        // FIXME: LCDC register (0xFF40) should default to 0x91 (LCD enabled, BG
+        // enabled, etc.)
+        // Currently returns 0 from readIORegister(), causing blank white screen
+
+        // FIXED: Added default PPU register values in Memory.readIORegister()
+        // LCDC now returns 0x91 (LCD enabled) by default
+
+        // FIXME: STAT register (0xFF41) should be initialized for proper mode handling
+        // FIXME: LY register (0xFF44) should start at 0 for scanline tracking
+
         // Initialize pixel FIFO system
         this.pixelFifo = new DmgPixelFifo(screen, memory);
         this.fetcher = new Fetcher(pixelFifo, memory);
@@ -30,6 +46,11 @@ public class PPU {
     }
 
     public void step(int cycles) {
+        // Don't step if no cartridge is loaded
+        if (!isCartridgeLoaded()) {
+            return;
+        }
+
         modeClock += cycles;
         switch (mode) {
             case 2 -> { // OAM mode
@@ -63,7 +84,14 @@ public class PPU {
                     memory.writeByte(0xFF44, (byte) (currentLine + 1));
                     if (currentLine == 143) {
                         mode = 1; // Switch to VBlank
-                        // Render screen here
+                        // FIXME: renderFrame() should be called here when entering VBlank
+                        // This is the correct time to render the complete frame
+                        try {
+                            renderFrame();
+                        } catch (Exception e) {
+                            System.err.println("PPU renderFrame() error: " + e.getMessage());
+                            updateLine();
+                        }
                     } else {
                         mode = 2; // Switch to OAM
                     }
@@ -75,9 +103,9 @@ public class PPU {
                     modeClock = 0;
                     int currentLine = memory.readByte(0xFF44) & 0xFF;
                     memory.writeByte(0xFF44, (byte) (currentLine + 1));
-                    if (currentLine > 153) {
-                        mode = 2; // Switch to OAM
-                        memory.writeByte(0xFF44, (byte) 0);
+                    if (currentLine >= 153) {
+                        mode = 2; // Switch to OAM for next frame
+                        memory.writeByte(0xFF44, (byte) 0); // Reset LY to 0
                     }
                 }
             }
@@ -86,6 +114,10 @@ public class PPU {
                 // no-op
             }
         }
+    }
+
+    private boolean isCartridgeLoaded() {
+        return memory.isCartridgeLoaded();
     }
 
     /**
@@ -109,7 +141,8 @@ public class PPU {
         int scx = memory.readByte(0xFF43) & 0xFF;
         int bgPalette = memory.readByte(0xFF47) & 0xFF; // BGP register
 
-        // If LCD is disabled, show a blank (white) screen
+        // FIXED: LCDC now defaults to 0x91 (LCD enabled) in Memory.readIORegister()
+        // This should prevent the blank white screen issue
         if (!lcdEnabled) {
             int white = 0xFFFFFF;
             for (int i = 0; i < WIDTH * HEIGHT; i++)
@@ -289,63 +322,68 @@ public class PPU {
         // done elsewhere
     }
 
+    public void updateGraphics() {
+        // Always render a frame regardless of cartridge state for testing
+        try {
+            // Simple test pattern if no cartridge is loaded
+            if (!isCartridgeLoaded()) {
+                renderTestPattern();
+            } else {
+                // Render from game data
+                renderFrame();
+            }
+        } catch (Exception e) {
+            System.err.println("PPU rendering error: " + e.getMessage());
+            e.printStackTrace();
+            // Fallback to test pattern
+            renderTestPattern();
+        }
+    }
+
     /**
-     * Render a full frame using background tile map (0x9800) and tile data
-     * (0x8000).
-     * This is a simplified renderer: it ignores scrolling, window, sprites, and
-     * palettes
-     * and assumes unsigned tile indexing and a simple 4-color grayscale mapping.
+     * Render a test pattern to verify that rendering pipeline works
      */
-    private void renderFrameOld() {
+    private void renderTestPattern() {
         final int WIDTH = 160;
         final int HEIGHT = 144;
-        final int TILE_WIDTH = 8;
-        final int TILE_HEIGHT = 8;
-        final int BG_MAP_ADDR = 0x9800;
-        final int TILE_DATA_ADDR = 0x8000; // using unsigned indexing
 
-        // Palette: 0=white, 1=light gray, 2=dark gray, 3=black
-        int[] palette = new int[] { 0xFFFFFF, 0xC0C0C0, 0x606060, 0x000000 };
-
-        // For each pixel in screen, determine tile and pixel within tile
+        // Create a colorful test pattern with different zones
         for (int y = 0; y < HEIGHT; y++) {
-            int tileRow = y / TILE_HEIGHT;
-            int rowInTile = y % TILE_HEIGHT;
             for (int x = 0; x < WIDTH; x++) {
-                int tileCol = x / TILE_WIDTH;
-                int colInTile = x % TILE_WIDTH;
+                int color;
 
-                int mapIndex = tileRow * 32 + tileCol; // 32 tiles per row in BG map
-                int mapAddr = BG_MAP_ADDR + mapIndex;
-                int tileNumber = memory.readByte(mapAddr) & 0xFF;
+                // Top-left: Checkerboard pattern
+                if (x < WIDTH / 2 && y < HEIGHT / 2) {
+                    if ((x / 8 + y / 8) % 2 == 0) {
+                        color = 0xFFFFFF; // White
+                    } else {
+                        color = 0x000000; // Black
+                    }
+                }
+                // Top-right: Gradient
+                else if (x >= WIDTH / 2 && y < HEIGHT / 2) {
+                    int gray = (x - WIDTH / 2) * 255 / (WIDTH / 2);
+                    color = (gray << 16) | (gray << 8) | gray;
+                }
+                // Bottom-left: Solid color
+                else if (x < WIDTH / 2 && y >= HEIGHT / 2) {
+                    color = 0x00FF00; // Green
+                }
+                // Bottom-right: Pattern
+                else {
+                    if ((x + y) % 16 < 8) {
+                        color = 0xFF0000; // Red
+                    } else {
+                        color = 0x0000FF; // Blue
+                    }
+                }
 
-                int tileAddr = TILE_DATA_ADDR + tileNumber * 16; // 16 bytes per tile
-                int lowByte = memory.readByte(tileAddr + rowInTile * 2) & 0xFF;
-                int highByte = memory.readByte(tileAddr + rowInTile * 2 + 1) & 0xFF;
-
-                int bitIndex = 7 - colInTile; // bit 7 is leftmost pixel
-                int lo = (lowByte >> bitIndex) & 0x1;
-                int hi = (highByte >> bitIndex) & 0x1;
-                int colorIndex = (hi << 1) | lo; // 0..3
-
-                frameBuffer[y * WIDTH + x] = palette[colorIndex];
+                frameBuffer[y * WIDTH + x] = color;
             }
         }
 
         screen.render(frameBuffer);
-    }
-
-    public void updateGraphics() {
-        // Perform a step for a line (456 cycles worth), then render full frame for now
-        this.step(456);
-        // Render full frame from VRAM background map to provide a visual output
-        try {
-            renderFrame();
-        } catch (Exception e) {
-            // Rendering must not crash emulator; fallback to simple updateLine
-            System.err.println("PPU rendering error: " + e.getMessage());
-            updateLine();
-        }
+        System.out.println("Rendered test pattern");
     }
 
     public Screen getScreen() {

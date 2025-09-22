@@ -1,4 +1,4 @@
-package gbc.controller;
+package gbc.core.io;
 
 import java.io.File;
 import java.io.IOException;

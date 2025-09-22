@@ -110,7 +110,9 @@ public class Fetcher {
                 int oamAddr = sprite.getAddress();
                 int tile = memory.readByte(oamAddr + 2) & 0xFF;
                 // For 8x16 sprites, tile index is forced even
-                if (true) { // TODO: Check sprite height from LCDC
+                int lcdc = memory.readByte(0xFF40) & 0xFF;
+                boolean is8x16Sprites = (lcdc & 0x04) != 0; // Bit 2: sprite height
+                if (is8x16Sprites) {
                     tile &= 0xFE;
                 }
                 tileId = tile;
@@ -164,8 +166,19 @@ public class Fetcher {
         this.sprite = sprite;
         this.spriteOffset = offset;
         this.spriteOamIndex = oamIndex;
-        // Calculate which line of the sprite to fetch
-        this.spriteTileLine = 0; // TODO: Calculate based on LY and sprite Y position
+
+        // Calculate which line of the sprite to fetch based on LY and sprite Y position
+        int ly = memory.readByte(0xFF44) & 0xFF; // Current scanline (LY register)
+        int spriteY = (memory.readByte(sprite.getAddress()) & 0xFF) - 16; // Sprite Y position from OAM
+
+        // Read LCDC to determine sprite height
+        int lcdc = memory.readByte(0xFF40) & 0xFF;
+        int spriteHeight = (lcdc & 0x04) != 0 ? 16 : 8; // Bit 2: sprite height
+
+        // Calculate which line of the sprite tile to fetch
+        int relativeY = ly - spriteY;
+        this.spriteTileLine = relativeY % (spriteHeight == 16 ? 16 : 8);
+
         this.state = State.READ_SPRITE_TILE_ID;
     }
 

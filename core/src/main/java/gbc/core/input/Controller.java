@@ -1,10 +1,8 @@
-package gbc.model.controller;
+package gbc.core.input;
 
-import gbc.model.memory.Memory;
 import gbc.model.cpu.Interruptions;
 
 public class Controller {
-	private Memory memory;
 	private Interruptions interruptions; // For interrupt handling
 
 	// Game Boy button states
@@ -20,19 +18,8 @@ public class Controller {
 	private boolean prevA, prevB, prevStart, prevSelect;
 
 	public Controller() {
-		this.memory = null;
 		this.interruptions = null;
 		reset();
-	}
-
-	public Controller(Memory memory) {
-		this.memory = memory;
-		this.interruptions = null;
-		reset();
-	}
-
-	public void setMemory(Memory memory) {
-		this.memory = memory;
 	}
 
 	public void setInterruptions(Interruptions interruptions) {

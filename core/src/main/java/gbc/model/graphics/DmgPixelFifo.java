@@ -10,12 +10,9 @@ public class DmgPixelFifo implements PixelFifo {
     private final IntQueue pixels = new IntQueue(16);
     private final IntQueue palettes = new IntQueue(16);
     private final IntQueue pixelType = new IntQueue(16); // 0 = background, 1 = sprite
-
-    private final Screen screen;
     private final Memory memory;
 
     public DmgPixelFifo(Screen screen, Memory memory) {
-        this.screen = screen;
         this.memory = memory;
     }
 
@@ -26,7 +23,7 @@ public class DmgPixelFifo implements PixelFifo {
 
     @Override
     public void putPixelToScreen() {
-        int pixel = dequeuePixel();
+        dequeuePixel();
         // For DMG, pixels are already RGB values
         // This would need to be updated when integrating with the main rendering loop
     }
@@ -58,7 +55,12 @@ public class DmgPixelFifo implements PixelFifo {
     @Override
     public void setOverlay(int[] pixelLine, int offset, TileAttributes spriteAttributes, int oamIndex) {
         boolean priority = spriteAttributes.isPriority();
-        int overlayPalette = 0; // TODO: Get from sprite palette registers
+        // Read sprite palette registers based on sprite attributes (DMG: bit 4 of OAM
+        // attr byte)
+        // For DMG, we need to check bit 4 of the sprite attributes byte
+        int spriteAttrByte = memory.readByte(0xFE00 + oamIndex * 4 + 3) & 0xFF;
+        int paletteRegister = (spriteAttrByte & 0x10) != 0 ? 0xFF49 : 0xFF48; // Bit 4: 0=OBP0, 1=OBP1
+        int overlayPalette = memory.readByte(paletteRegister) & 0xFF;
 
         for (int j = offset; j < pixelLine.length; j++) {
             int p = pixelLine[j];
@@ -79,26 +81,5 @@ public class DmgPixelFifo implements PixelFifo {
         pixels.clear();
         palettes.clear();
         pixelType.clear();
-    }
-
-    /**
-     * Get the color value for a pixel using DMG palette mapping.
-     * 
-     * @param paletteIndex the palette register value
-     * @param pixelValue   the pixel value (0-3)
-     * @return RGB color value
-     */
-    private int getColor(int paletteIndex, int pixelValue) {
-        // DMG palette mapping (each 2 bits select a shade)
-        int shade = (paletteIndex >> (pixelValue * 2)) & 0x3;
-
-        // Map to grayscale colors
-        return switch (shade) {
-            case 0 -> 0xFFFFFF; // White
-            case 1 -> 0xC0C0C0; // Light gray
-            case 2 -> 0x606060; // Dark gray
-            case 3 -> 0x000000; // Black
-            default -> 0xFFFFFF;
-        };
     }
 }

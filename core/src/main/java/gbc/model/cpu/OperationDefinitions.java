@@ -45,10 +45,95 @@ final class OperationDefinitions {
     private static void registerMisc(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
         register(grouped, OperationType.MISC, 0x00, "NOP", 1, cycles(4), false);
 
-        // Return instructions keep emulator control flow ticking even before a full
-        // instruction set is defined.
-        register(grouped, OperationType.CONTROL_FLOW, 0xC9, "RET", 1, cycles(16), false);
-        register(grouped, OperationType.CONTROL_FLOW, 0xD9, "RETI", 1, cycles(16), false);
+        // Rotate operations
+        register(grouped, OperationType.BIT_MANIPULATION, 0x07, "RLCA", 1, cycles(4), false);
+        register(grouped, OperationType.BIT_MANIPULATION, 0x0F, "RRCA", 1, cycles(4), false);
+        register(grouped, OperationType.BIT_MANIPULATION, 0x17, "RLA", 1, cycles(4), false);
+        register(grouped, OperationType.BIT_MANIPULATION, 0x1F, "RRA", 1, cycles(4), false);
+
+        // Interrupt control
+        register(grouped, OperationType.MISC, 0xF3, "DI", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xFB, "EI", 1, cycles(4), false);
+
+        // Carry flag operations
+        register(grouped, OperationType.MISC, 0x37, "SCF", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0x3F, "CCF", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0x2F, "CPL", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0x27, "DAA", 1, cycles(4), false);
+
+        // Halt and Stop
+        register(grouped, OperationType.MISC, 0x76, "HALT", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0x10, "STOP", 2, cycles(4), true, operands());
+
+        // Jump operations
+        // JR r8 (unconditional) always 12 cycles
+        register(grouped, OperationType.CONTROL_FLOW, 0x18, "JR", 2, cycles(12), true, operands(imm("r8")));
+        // Conditional JR: not taken 8 cycles, taken 12 cycles (store as [8,12])
+        register(grouped, OperationType.CONTROL_FLOW, 0x20, "JR", 2, cycles(8, 12), true,
+                operands(imm("NZ"), imm("r8")));
+        register(grouped, OperationType.CONTROL_FLOW, 0x28, "JR", 2, cycles(8, 12), true,
+                operands(imm("Z"), imm("r8")));
+        register(grouped, OperationType.CONTROL_FLOW, 0x30, "JR", 2, cycles(8, 12), true,
+                operands(imm("NC"), imm("r8")));
+        register(grouped, OperationType.CONTROL_FLOW, 0x38, "JR", 2, cycles(8, 12), true,
+                operands(imm("C"), imm("r8")));
+
+        register(grouped, OperationType.CONTROL_FLOW, 0xC3, "JP", 3, cycles(16), true, operands(imm("a16")));
+        // Conditional JP: not taken 12 cycles, taken 16 cycles (store as [12,16])
+        register(grouped, OperationType.CONTROL_FLOW, 0xC2, "JP", 3, cycles(12, 16), true,
+                operands(imm("NZ"), imm("a16")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xCA, "JP", 3, cycles(12, 16), true,
+                operands(imm("Z"), imm("a16")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xD2, "JP", 3, cycles(12, 16), true,
+                operands(imm("NC"), imm("a16")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xDA, "JP", 3, cycles(12, 16), true,
+                operands(imm("C"), imm("a16")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xE9, "JP", 1, cycles(4), false, operands(mem("HL")));
+
+        // Call operations
+        register(grouped, OperationType.CONTROL_FLOW, 0xCD, "CALL", 3, cycles(24), true, operands(imm("a16")));
+        // Conditional CALL: not taken 12 cycles, taken 24 cycles (store as [12,24])
+        register(grouped, OperationType.CONTROL_FLOW, 0xC4, "CALL", 3, cycles(12, 24), true,
+                operands(imm("NZ"), imm("a16")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xCC, "CALL", 3, cycles(12, 24), true,
+                operands(imm("Z"), imm("a16")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xD4, "CALL", 3, cycles(12, 24), true,
+                operands(imm("NC"), imm("a16")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xDC, "CALL", 3, cycles(12, 24), true,
+                operands(imm("C"), imm("a16")));
+
+        // Return operations
+        register(grouped, OperationType.CONTROL_FLOW, 0xC9, "RET", 1, cycles(16), true);
+        // Conditional RET: not taken 8 cycles, taken 20 cycles (store as [8,20])
+        register(grouped, OperationType.CONTROL_FLOW, 0xC0, "RET", 1, cycles(8, 20), true, operands(imm("NZ")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xC8, "RET", 1, cycles(8, 20), true, operands(imm("Z")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xD0, "RET", 1, cycles(8, 20), true, operands(imm("NC")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xD8, "RET", 1, cycles(8, 20), true, operands(imm("C")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xD9, "RETI", 1, cycles(16), true);
+
+        // RST operations
+        register(grouped, OperationType.CONTROL_FLOW, 0xC7, "RST", 1, cycles(16), true, operands(imm("00H")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xCF, "RST", 1, cycles(16), true, operands(imm("08H")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xD7, "RST", 1, cycles(16), true, operands(imm("10H")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xDF, "RST", 1, cycles(16), true, operands(imm("18H")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xE7, "RST", 1, cycles(16), true, operands(imm("20H")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xEF, "RST", 1, cycles(16), true, operands(imm("28H")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xF7, "RST", 1, cycles(16), true, operands(imm("30H")));
+        register(grouped, OperationType.CONTROL_FLOW, 0xFF, "RST", 1, cycles(16), true, operands(imm("38H")));
+
+        // Invalid/Unused opcodes - these should not be executed but we handle them
+        // gracefully
+        register(grouped, OperationType.MISC, 0xD3, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xDB, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xDD, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xE3, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xE4, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xEB, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xEC, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xED, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xF4, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xFC, "INVALID", 1, cycles(4), false);
+        register(grouped, OperationType.MISC, 0xFD, "INVALID", 1, cycles(4), false);
     }
 
     private static void registerLoadTransfers(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
@@ -64,8 +149,11 @@ final class OperationDefinitions {
         register(grouped, type, 0x36, "LD", 2, cycles(12), true, operands(mem("HL"), imm("d8")));
         register(grouped, type, 0x3E, "LD", 2, cycles(8), true, operands(reg("A"), imm("d8")));
 
-        // Load HL with immediate 16-bit value
+        // Load 16-bit registers with immediate values
+        register(grouped, type, 0x01, "LD", 3, cycles(12), true, operands(reg("BC"), imm("d16")));
+        register(grouped, type, 0x11, "LD", 3, cycles(12), true, operands(reg("DE"), imm("d16")));
         register(grouped, type, 0x21, "LD", 3, cycles(12), true, operands(reg("HL"), imm("d16")));
+        register(grouped, type, 0x31, "LD", 3, cycles(12), true, operands(reg("SP"), imm("d16")));
 
         // Register-transfer loads centred around accumulator interactions
         register(grouped, type, 0x47, "LD", 1, cycles(4), false, operands(reg("B"), reg("A")));
@@ -84,6 +172,108 @@ final class OperationDefinitions {
         register(grouped, type, 0x7D, "LD", 1, cycles(4), false, operands(reg("A"), reg("L")));
         register(grouped, type, 0x7E, "LD", 1, cycles(8), false, operands(reg("A"), mem("HL")));
         register(grouped, type, 0x7F, "LD", 1, cycles(4), false, operands(reg("A"), reg("A")));
+
+        // Additional register-to-register loads
+        register(grouped, type, 0x40, "LD", 1, cycles(4), false, operands(reg("B"), reg("B")));
+        register(grouped, type, 0x41, "LD", 1, cycles(4), false, operands(reg("B"), reg("C")));
+        register(grouped, type, 0x42, "LD", 1, cycles(4), false, operands(reg("B"), reg("D")));
+        register(grouped, type, 0x43, "LD", 1, cycles(4), false, operands(reg("B"), reg("E")));
+        register(grouped, type, 0x44, "LD", 1, cycles(4), false, operands(reg("B"), reg("H")));
+        register(grouped, type, 0x45, "LD", 1, cycles(4), false, operands(reg("B"), reg("L")));
+        register(grouped, type, 0x46, "LD", 1, cycles(8), false, operands(reg("B"), mem("HL")));
+
+        register(grouped, type, 0x48, "LD", 1, cycles(4), false, operands(reg("C"), reg("B")));
+        register(grouped, type, 0x49, "LD", 1, cycles(4), false, operands(reg("C"), reg("C")));
+        register(grouped, type, 0x4A, "LD", 1, cycles(4), false, operands(reg("C"), reg("D")));
+        register(grouped, type, 0x4B, "LD", 1, cycles(4), false, operands(reg("C"), reg("E")));
+        register(grouped, type, 0x4C, "LD", 1, cycles(4), false, operands(reg("C"), reg("H")));
+        register(grouped, type, 0x4D, "LD", 1, cycles(4), false, operands(reg("C"), reg("L")));
+        register(grouped, type, 0x4E, "LD", 1, cycles(8), false, operands(reg("C"), mem("HL")));
+
+        register(grouped, type, 0x50, "LD", 1, cycles(4), false, operands(reg("D"), reg("B")));
+        register(grouped, type, 0x51, "LD", 1, cycles(4), false, operands(reg("D"), reg("C")));
+        register(grouped, type, 0x52, "LD", 1, cycles(4), false, operands(reg("D"), reg("D")));
+        register(grouped, type, 0x53, "LD", 1, cycles(4), false, operands(reg("D"), reg("E")));
+        register(grouped, type, 0x54, "LD", 1, cycles(4), false, operands(reg("D"), reg("H")));
+        register(grouped, type, 0x55, "LD", 1, cycles(4), false, operands(reg("D"), reg("L")));
+        register(grouped, type, 0x56, "LD", 1, cycles(8), false, operands(reg("D"), mem("HL")));
+
+        register(grouped, type, 0x58, "LD", 1, cycles(4), false, operands(reg("E"), reg("B")));
+        register(grouped, type, 0x59, "LD", 1, cycles(4), false, operands(reg("E"), reg("C")));
+        register(grouped, type, 0x5A, "LD", 1, cycles(4), false, operands(reg("E"), reg("D")));
+        register(grouped, type, 0x5B, "LD", 1, cycles(4), false, operands(reg("E"), reg("E")));
+        register(grouped, type, 0x5C, "LD", 1, cycles(4), false, operands(reg("E"), reg("H")));
+        register(grouped, type, 0x5D, "LD", 1, cycles(4), false, operands(reg("E"), reg("L")));
+        register(grouped, type, 0x5E, "LD", 1, cycles(8), false, operands(reg("E"), mem("HL")));
+
+        register(grouped, type, 0x60, "LD", 1, cycles(4), false, operands(reg("H"), reg("B")));
+        register(grouped, type, 0x61, "LD", 1, cycles(4), false, operands(reg("H"), reg("C")));
+        register(grouped, type, 0x62, "LD", 1, cycles(4), false, operands(reg("H"), reg("D")));
+        register(grouped, type, 0x63, "LD", 1, cycles(4), false, operands(reg("H"), reg("E")));
+        register(grouped, type, 0x64, "LD", 1, cycles(4), false, operands(reg("H"), reg("H")));
+        register(grouped, type, 0x65, "LD", 1, cycles(4), false, operands(reg("H"), reg("L")));
+        register(grouped, type, 0x66, "LD", 1, cycles(8), false, operands(reg("H"), mem("HL")));
+
+        register(grouped, type, 0x68, "LD", 1, cycles(4), false, operands(reg("L"), reg("B")));
+        register(grouped, type, 0x69, "LD", 1, cycles(4), false, operands(reg("L"), reg("C")));
+        register(grouped, type, 0x6A, "LD", 1, cycles(4), false, operands(reg("L"), reg("D")));
+        register(grouped, type, 0x6B, "LD", 1, cycles(4), false, operands(reg("L"), reg("E")));
+        register(grouped, type, 0x6C, "LD", 1, cycles(4), false, operands(reg("L"), reg("H")));
+        register(grouped, type, 0x6D, "LD", 1, cycles(4), false, operands(reg("L"), reg("L")));
+        register(grouped, type, 0x6E, "LD", 1, cycles(8), false, operands(reg("L"), mem("HL")));
+
+        register(grouped, type, 0x70, "LD", 1, cycles(8), false, operands(mem("HL"), reg("B")));
+        register(grouped, type, 0x71, "LD", 1, cycles(8), false, operands(mem("HL"), reg("C")));
+        register(grouped, type, 0x72, "LD", 1, cycles(8), false, operands(mem("HL"), reg("D")));
+        register(grouped, type, 0x73, "LD", 1, cycles(8), false, operands(mem("HL"), reg("E")));
+        register(grouped, type, 0x74, "LD", 1, cycles(8), false, operands(mem("HL"), reg("H")));
+        register(grouped, type, 0x75, "LD", 1, cycles(8), false, operands(mem("HL"), reg("L")));
+
+        // Special LD operations
+        register(grouped, type, 0x02, "LD", 1, cycles(8), false, operands(mem("BC"), reg("A")));
+        register(grouped, type, 0x12, "LD", 1, cycles(8), false, operands(mem("DE"), reg("A")));
+        register(grouped, type, 0x22, "LD", 1, cycles(8), false, operands(mem("HL+"), reg("A")));
+        register(grouped, type, 0x32, "LD", 1, cycles(8), false, operands(mem("HL-"), reg("A")));
+
+        register(grouped, type, 0x0A, "LD", 1, cycles(8), false, operands(reg("A"), mem("BC")));
+        register(grouped, type, 0x1A, "LD", 1, cycles(8), false, operands(reg("A"), mem("DE")));
+        register(grouped, type, 0x2A, "LD", 1, cycles(8), false, operands(reg("A"), mem("HL+")));
+        register(grouped, type, 0x3A, "LD", 1, cycles(8), false, operands(reg("A"), mem("HL-")));
+
+        // LDH operations
+        register(grouped, type, 0xE0, "LDH", 2, cycles(12), true, operands(mem("a8"), reg("A")));
+        register(grouped, type, 0xF0, "LDH", 2, cycles(12), true, operands(reg("A"), mem("a8")));
+        register(grouped, type, 0xE2, "LDH", 1, cycles(8), false, operands(mem("C"), reg("A")));
+        register(grouped, type, 0xF2, "LDH", 1, cycles(8), false, operands(reg("A"), mem("C")));
+
+        // LD A, (a16)
+        register(grouped, type, 0xFA, "LD", 3, cycles(16), true, operands(reg("A"), mem("a16")));
+        // LD (a16), A
+        register(grouped, type, 0xEA, "LD", 3, cycles(16), true, operands(mem("a16"), reg("A")));
+        // LD (a16), SP
+        register(grouped, type, 0x08, "LD", 3, cycles(20), true, operands(mem("a16"), reg("SP")));
+
+        // Stack operations - PUSH
+        register(grouped, type, 0xC5, "PUSH", 1, cycles(16), false, operands(reg("BC")));
+        register(grouped, type, 0xD5, "PUSH", 1, cycles(16), false, operands(reg("DE")));
+        register(grouped, type, 0xE5, "PUSH", 1, cycles(16), false, operands(reg("HL")));
+        register(grouped, type, 0xF5, "PUSH", 1, cycles(16), false, operands(reg("AF")));
+
+        // Stack operations - POP
+        register(grouped, type, 0xC1, "POP", 1, cycles(12), false, operands(reg("BC")));
+        register(grouped, type, 0xD1, "POP", 1, cycles(12), false, operands(reg("DE")));
+        register(grouped, type, 0xE1, "POP", 1, cycles(12), false, operands(reg("HL")));
+        register(grouped, type, 0xF1, "POP", 1, cycles(12), false, operands(reg("AF")));
+
+        // Missing operations
+        register(grouped, OperationType.BIT_MANIPULATION, 0xFC, "SET", 2, cycles(16), false,
+                operands(bitOperand(7), mem("HL")));
+        register(grouped, OperationType.LOAD_TRANSFER, 0xF9, "LD", 1, cycles(8), false, operands(reg("SP"), reg("HL")));
+        register(grouped, OperationType.MISC, 0x0F, "RRCA", 1, cycles(4), false);
+
+        // LD HL,SP+r8 operation
+        register(grouped, OperationType.LOAD_TRANSFER, 0xF8, "LD", 2, cycles(12), true,
+                operands(reg("HL"), imm("SP+r8")));
     }
 
     private static void registerArithmetic(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
@@ -122,6 +312,15 @@ final class OperationDefinitions {
                     operands(operand(targets[i], isRegister[i])));
         }
         register(grouped, type, 0xDE, "SBC", 2, cycles(8), true, operands(imm("d8")));
+
+        // ADD HL, rr operations
+        register(grouped, type, 0x09, "ADD", 1, cycles(8), false, operands(reg("HL"), reg("BC")));
+        register(grouped, type, 0x19, "ADD", 1, cycles(8), false, operands(reg("HL"), reg("DE")));
+        register(grouped, type, 0x29, "ADD", 1, cycles(8), false, operands(reg("HL"), reg("HL")));
+        register(grouped, type, 0x39, "ADD", 1, cycles(8), false, operands(reg("HL"), reg("SP")));
+
+        // ADD SP, r8 operation
+        register(grouped, type, 0xE8, "ADD", 2, cycles(16), true, operands(reg("SP"), imm("r8")));
     }
 
     private static void registerLogic(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
@@ -175,19 +374,21 @@ final class OperationDefinitions {
             register(grouped, type, decOpcodes[i], "DEC", 1, cycles(isRegister[i] ? 4 : 12), false,
                     operands(operand(targets[i], isRegister[i])));
         }
+
+        // 16-bit register increment/decrement
+        register(grouped, type, 0x03, "INC", 1, cycles(8), false, operands(reg("BC")));
+        register(grouped, type, 0x13, "INC", 1, cycles(8), false, operands(reg("DE")));
+        register(grouped, type, 0x23, "INC", 1, cycles(8), false, operands(reg("HL")));
+        register(grouped, type, 0x33, "INC", 1, cycles(8), false, operands(reg("SP")));
+
+        register(grouped, type, 0x0B, "DEC", 1, cycles(8), false, operands(reg("BC")));
+        register(grouped, type, 0x1B, "DEC", 1, cycles(8), false, operands(reg("DE")));
+        register(grouped, type, 0x2B, "DEC", 1, cycles(8), false, operands(reg("HL")));
+        register(grouped, type, 0x3B, "DEC", 1, cycles(8), false, operands(reg("SP")));
     }
 
     private static void registerStack(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
-        OperationType type = OperationType.STACK_IO;
-        register(grouped, type, 0xF5, "PUSH", 1, cycles(16), false, operands(reg("AF")));
-        register(grouped, type, 0xC5, "PUSH", 1, cycles(16), false, operands(reg("BC")));
-        register(grouped, type, 0xD5, "PUSH", 1, cycles(16), false, operands(reg("DE")));
-        register(grouped, type, 0xE5, "PUSH", 1, cycles(16), false, operands(reg("HL")));
-
-        register(grouped, type, 0xF1, "POP", 1, cycles(12), false, operands(reg("AF")));
-        register(grouped, type, 0xC1, "POP", 1, cycles(12), false, operands(reg("BC")));
-        register(grouped, type, 0xD1, "POP", 1, cycles(12), false, operands(reg("DE")));
-        register(grouped, type, 0xE1, "POP", 1, cycles(12), false, operands(reg("HL")));
+        // Stack operations are now handled in registerLoadTransfers
     }
 
     private static void registerBitOperations(EnumMap<OperationType, Map<Integer, Operation>> grouped) {
@@ -195,6 +396,35 @@ final class OperationDefinitions {
         String[] targets = { "B", "C", "D", "E", "H", "L", "HL", "A" };
         boolean[] isRegister = { true, true, true, true, true, true, false, true };
 
+        // Rotate and shift operations (CB 0x00-0x3F)
+        for (int index = 0; index < targets.length; index++) {
+            // RLC (Rotate Left Circular) - CB 0x00-0x07
+            register(grouped, type, 0x00 + index, "RLC", 2, cycles(isRegister[index] ? 8 : 16), false,
+                    operands(operand(targets[index], isRegister[index])));
+            // RRC (Rotate Right Circular) - CB 0x08-0x0F
+            register(grouped, type, 0x08 + index, "RRC", 2, cycles(isRegister[index] ? 8 : 16), false,
+                    operands(operand(targets[index], isRegister[index])));
+            // RL (Rotate Left) - CB 0x10-0x17
+            register(grouped, type, 0x10 + index, "RL", 2, cycles(isRegister[index] ? 8 : 16), false,
+                    operands(operand(targets[index], isRegister[index])));
+            // RR (Rotate Right) - CB 0x18-0x1F
+            register(grouped, type, 0x18 + index, "RR", 2, cycles(isRegister[index] ? 8 : 16), false,
+                    operands(operand(targets[index], isRegister[index])));
+            // SLA (Shift Left Arithmetic) - CB 0x20-0x27
+            register(grouped, type, 0x20 + index, "SLA", 2, cycles(isRegister[index] ? 8 : 16), false,
+                    operands(operand(targets[index], isRegister[index])));
+            // SRA (Shift Right Arithmetic) - CB 0x28-0x2F
+            register(grouped, type, 0x28 + index, "SRA", 2, cycles(isRegister[index] ? 8 : 16), false,
+                    operands(operand(targets[index], isRegister[index])));
+            // SWAP operations (CB 0x30-0x37)
+            register(grouped, type, 0x30 + index, "SWAP", 2, cycles(isRegister[index] ? 8 : 16), false,
+                    operands(operand(targets[index], isRegister[index])));
+            // SRL (Shift Right Logical) - CB 0x38-0x3F
+            register(grouped, type, 0x38 + index, "SRL", 2, cycles(isRegister[index] ? 8 : 16), false,
+                    operands(operand(targets[index], isRegister[index])));
+        }
+
+        // Bit operations (CB 0x40-0xFF)
         for (int bit = 0; bit < 8; bit++) {
             for (int index = 0; index < targets.length; index++) {
                 int base = bit * 8 + index;
