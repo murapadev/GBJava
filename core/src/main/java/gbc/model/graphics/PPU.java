@@ -81,8 +81,7 @@ public class PPU {
                 if (modeClock >= 204) {
                     modeClock = 0;
                     int currentLine = memory.readByte(0xFF44) & 0xFF;
-                    memory.writeByte(0xFF44, (byte) (currentLine + 1));
-                    if (currentLine == 143) {
+                    if (currentLine == 144) {
                         mode = 1; // Switch to VBlank
                         // FIXME: renderFrame() should be called here when entering VBlank
                         // This is the correct time to render the complete frame
@@ -102,10 +101,8 @@ public class PPU {
                 if (modeClock >= 456) {
                     modeClock = 0;
                     int currentLine = memory.readByte(0xFF44) & 0xFF;
-                    memory.writeByte(0xFF44, (byte) (currentLine + 1));
-                    if (currentLine >= 153) {
+                    if (currentLine == 0) {
                         mode = 2; // Switch to OAM for next frame
-                        memory.writeByte(0xFF44, (byte) 0); // Reset LY to 0
                     }
                 }
             }

@@ -29,9 +29,6 @@ public class Interruptions {
     }
 
     public boolean handleInterrupts() {
-        if (cpu.isHaltBugTriggered()) {
-            return false;
-        }
         byte interruptFlag = (byte) memory.readByte(ADDR_INTERRUPT_FLAG);
         byte interruptEnable = (byte) memory.readByte(ADDR_INTERRUPT_ENABLE);
 
@@ -39,6 +36,20 @@ public class Interruptions {
         if (interruptFired == 0) {
             return false;
         }
+
+        // If the CPU is halted, it will wake up on an interrupt request,
+        // even if IME is disabled.
+        if (cpu.isHalted()) {
+            cpu.setHalted(false);
+        }
+
+        // Only service the interrupt if IME is enabled.
+        if (!cpu.isIme()) {
+            return false;
+        }
+
+        // The HALT bug is handled in the CPU cycle, so we don't need to check for it
+        // here.
 
         // Service the first interrupt that's fired
         if ((interruptFired & INTERRUPT_VBLANK) != 0) {

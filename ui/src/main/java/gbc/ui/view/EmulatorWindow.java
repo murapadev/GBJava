@@ -2,8 +2,10 @@ package gbc.ui.view;
 
 import gbc.model.GameBoyColor;
 import gbc.ui.controller.EmulatorController;
+import gbc.ui.view.EmulatorView.ColorFilter;
 
 import javax.swing.*;
+import javax.swing.Box;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
@@ -25,11 +27,14 @@ public class EmulatorWindow extends JFrame implements KeyListener {
     private DebugView debugView;
     private VRAMViewer vramViewer;
     private MenuBar menuBar;
+    private PrimaryToolbar primaryToolbar;
 
     // Status and info
-    private JLabel statusLabel;
-    private JLabel fpsLabel;
     private JPanel statusPanel;
+    private JLabel romStatusLabel;
+    private JLabel stateStatusLabel;
+    private JLabel speedStatusLabel;
+    private JLabel fpsStatusLabel;
 
     // Window state
     private boolean isFullscreen = false;
@@ -70,16 +75,11 @@ public class EmulatorWindow extends JFrame implements KeyListener {
 
             // Create menu bar
             try {
-                menuBar = new MenuBar(gbc, debugView, vramViewer, emulatorView);
+                menuBar = new MenuBar(this, gbc, emulatorView);
             } catch (Exception e) {
                 System.out.println("Custom menu bar not available: " + e.getMessage());
-                // Create simple fallback - set to null and create simple JMenuBar
                 menuBar = null;
             }
-
-            // Status components
-            statusLabel = new JLabel("Ready");
-            fpsLabel = new JLabel("FPS: --");
 
         } catch (Exception e) {
             System.err.println("Error initializing components: " + e.getMessage());
@@ -87,14 +87,22 @@ public class EmulatorWindow extends JFrame implements KeyListener {
 
             // Fallback: create minimal components
             emulatorView = new EmulatorView(gbc);
-            statusLabel = new JLabel("Error initializing - using minimal UI");
-            fpsLabel = new JLabel("FPS: --");
             menuBar = null;
         }
+
+        primaryToolbar = new PrimaryToolbar(this, menuBar, emulatorView);
+        romStatusLabel = new JLabel("ROM: none");
+        stateStatusLabel = new JLabel("State: Ready");
+        speedStatusLabel = new JLabel("Speed: 100%");
+        fpsStatusLabel = new JLabel("FPS: --");
     }
 
     private void setupLayout() {
         setLayout(new BorderLayout());
+
+        if (primaryToolbar != null) {
+            add(primaryToolbar, BorderLayout.NORTH);
+        }
 
         // Main emulator view
         add(emulatorView, BorderLayout.CENTER);
@@ -122,10 +130,19 @@ public class EmulatorWindow extends JFrame implements KeyListener {
         }
 
         // Status panel
-        statusPanel = new JPanel(new BorderLayout());
-        statusPanel.setBorder(BorderFactory.createLoweredBevelBorder());
-        statusPanel.add(statusLabel, BorderLayout.WEST);
-        statusPanel.add(fpsLabel, BorderLayout.EAST);
+        statusPanel = new JPanel();
+        statusPanel.setLayout(new BoxLayout(statusPanel, BoxLayout.X_AXIS));
+        statusPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLoweredBevelBorder(),
+                BorderFactory.createEmptyBorder(2, 8, 2, 8)));
+        statusPanel.add(romStatusLabel);
+        statusPanel.add(Box.createHorizontalStrut(16));
+        statusPanel.add(stateStatusLabel);
+        statusPanel.add(Box.createHorizontalStrut(16));
+        statusPanel.add(speedStatusLabel);
+        statusPanel.add(Box.createHorizontalStrut(16));
+        statusPanel.add(fpsStatusLabel);
+        statusPanel.add(Box.createHorizontalGlue());
         add(statusPanel, BorderLayout.SOUTH);
     }
 
@@ -173,6 +190,8 @@ public class EmulatorWindow extends JFrame implements KeyListener {
         });
 
         setVisible(true);
+
+        refreshUiState(true);
     }
 
     public void setController(EmulatorController controller) {
@@ -180,6 +199,13 @@ public class EmulatorWindow extends JFrame implements KeyListener {
         if (menuBar != null) {
             menuBar.setController(controller);
         }
+        if (primaryToolbar != null) {
+            primaryToolbar.setController(controller);
+        }
+        if (debugView != null) {
+            debugView.setController(controller);
+        }
+        refreshUiState(true);
     }
 
     public void update() {
@@ -207,41 +233,124 @@ public class EmulatorWindow extends JFrame implements KeyListener {
     }
 
     private void updateStatus() {
-        // Check if a cartridge is loaded by checking if ROM area has been initialized
+        updateRomStatus();
+        updateSpeedStatus();
+        boolean paused = controller != null ? controller.isPaused() : gbc.isPaused();
+        stateStatusLabel.setText(paused ? "State: Paused" : "State: Running");
+        refreshUiState(false);
+    }
+
+    private void updateRomStatus() {
         try {
-            int romByte = gbc.getMemory().readByte(0x0134); // Read from ROM title area
+            int romByte = gbc.getMemory().readByte(0x0134);
             if (romByte != 0) {
-                // Try to read ROM title
                 StringBuilder title = new StringBuilder();
                 for (int i = 0x0134; i <= 0x0143; i++) {
-                    int b = gbc.getMemory().readByte(i) & 0xFF;
-                    if (b == 0)
+                    int value = gbc.getMemory().readByte(i) & 0xFF;
+                    if (value == 0) {
                         break;
-                    if (b >= 32 && b <= 126) { // Printable ASCII
-                        title.append((char) b);
+                    }
+                    if (value >= 32 && value <= 126) {
+                        title.append((char) value);
                     }
                 }
                 if (title.length() > 0) {
-                    statusLabel.setText("ROM: " + title.toString().trim());
+                    romStatusLabel.setText("ROM: " + title.toString().trim());
                 } else {
-                    statusLabel.setText("ROM Loaded");
+                    romStatusLabel.setText("ROM: loaded");
                 }
             } else {
-                statusLabel.setText("No ROM loaded");
+                romStatusLabel.setText("ROM: none");
             }
         } catch (Exception e) {
-            statusLabel.setText("No ROM loaded");
+            romStatusLabel.setText("ROM: none");
         }
+    }
+
+    private void updateSpeedStatus() {
+        float speed = gbc.getSpeedMultiplier();
+        speedStatusLabel.setText(String.format("Speed: %.0f%%", speed * 100f));
+    }
+
+    public void refreshUiState(boolean updateMenu) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> refreshUiState(updateMenu));
+            return;
+        }
+
+        boolean paused = controller != null ? controller.isPaused() : gbc.isPaused();
+        float speed = gbc.getSpeedMultiplier();
+        ColorFilter filter = emulatorView.getColorFilter();
+        boolean scanlines = emulatorView.isShowScanlines();
+        boolean smooth = emulatorView.isSmoothScaling();
+        boolean maintainAspect = emulatorView.isMaintainAspectRatio();
+        int scale = emulatorView.getScaleFactor();
+
+        if (primaryToolbar != null) {
+            primaryToolbar.syncState(paused, speed, filter, scanlines, smooth, maintainAspect, scale);
+        }
+
+        if (updateMenu && menuBar != null) {
+            menuBar.synchronizePauseState(paused);
+            menuBar.synchronizeSpeedFromWindow(speed);
+            menuBar.synchronizeScaleFromWindow(scale);
+            menuBar.synchronizeDisplayOptionsFromWindow(scanlines, smooth, maintainAspect);
+            menuBar.synchronizeFilterFromWindow(filter);
+            menuBar.synchronizeAlwaysOnTop(isAlwaysOnTop());
+        }
+    }
+
+    public void onPauseStateChanged(boolean paused) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> onPauseStateChanged(paused));
+            return;
+        }
+        stateStatusLabel.setText(paused ? "State: Paused" : "State: Running");
+        refreshUiState(true);
+        if (debugView != null) {
+            debugView.reflectPauseState(paused);
+        }
+    }
+
+    public void onSpeedChanged(float speed) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> onSpeedChanged(speed));
+            return;
+        }
+        speedStatusLabel.setText(String.format("Speed: %.0f%%", speed * 100f));
+        refreshUiState(true);
+    }
+
+    public void onDisplaySettingsChanged(boolean updateMenu) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> onDisplaySettingsChanged(updateMenu));
+            return;
+        }
+        refreshUiState(updateMenu);
+    }
+
+    public void onColorFilterChanged(ColorFilter filter, boolean updateMenu) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> onColorFilterChanged(filter, updateMenu));
+            return;
+        }
+        refreshUiState(updateMenu);
+    }
+
+    public boolean hasDebugView() {
+        return debugView != null;
+    }
+
+    public boolean hasVRAMViewer() {
+        return vramViewer != null;
     }
 
     public void updateFPS(double fps) {
         // Ensure FPS updates happen on EDT
         if (SwingUtilities.isEventDispatchThread()) {
-            fpsLabel.setText(String.format("FPS: %.1f", fps));
+            fpsStatusLabel.setText(String.format("FPS: %.1f", fps));
         } else {
-            SwingUtilities.invokeLater(() -> {
-                fpsLabel.setText(String.format("FPS: %.1f", fps));
-            });
+            SwingUtilities.invokeLater(() -> fpsStatusLabel.setText(String.format("FPS: %.1f", fps)));
         }
     }
 
@@ -260,7 +369,12 @@ public class EmulatorWindow extends JFrame implements KeyListener {
             isFullscreen = true;
 
             // Hide status panel in fullscreen
-            statusPanel.setVisible(false);
+            if (statusPanel != null) {
+                statusPanel.setVisible(false);
+            }
+            if (primaryToolbar != null) {
+                primaryToolbar.setVisible(false);
+            }
 
         } else {
             // Exit fullscreen
@@ -273,7 +387,12 @@ public class EmulatorWindow extends JFrame implements KeyListener {
             isFullscreen = false;
 
             // Show status panel
-            statusPanel.setVisible(true);
+            if (statusPanel != null) {
+                statusPanel.setVisible(true);
+            }
+            if (primaryToolbar != null) {
+                primaryToolbar.setVisible(true);
+            }
         }
 
         // Request focus back to this window
@@ -282,12 +401,20 @@ public class EmulatorWindow extends JFrame implements KeyListener {
 
     // Debug windows management
     public void openDebugView() {
+        if (debugView == null) {
+            showMessage("Debug view is not available in this build.", "Debug View", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         debugView.setVisible(true);
         debugView.toFront();
         debugView.updateAllViews();
     }
 
     public void openVRAMViewer() {
+        if (vramViewer == null) {
+            showMessage("VRAM viewer is not available in this build.", "VRAM Viewer", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         vramViewer.setVisible(true);
         vramViewer.toFront();
         vramViewer.refresh();
@@ -329,6 +456,19 @@ public class EmulatorWindow extends JFrame implements KeyListener {
     public void togglePause() {
         if (controller != null) {
             controller.togglePause();
+        }
+    }
+
+    public void stepInstruction() {
+        if (controller != null) {
+            controller.stepInstruction();
+        } else {
+            gbc.executeCycle();
+            emulatorView.repaint();
+            if (debugView != null) {
+                debugView.updateAllViews();
+            }
+            setStatusText(String.format("Stepped - PC: $%04X", gbc.getCpu().getRegisters().getPC()));
         }
     }
 
@@ -482,9 +622,9 @@ public class EmulatorWindow extends JFrame implements KeyListener {
     public void setStatusText(String text) {
         // Ensure status updates happen on EDT
         if (SwingUtilities.isEventDispatchThread()) {
-            statusLabel.setText(text);
+            stateStatusLabel.setText(text);
         } else {
-            SwingUtilities.invokeLater(() -> statusLabel.setText(text));
+            SwingUtilities.invokeLater(() -> stateStatusLabel.setText(text));
         }
     }
 

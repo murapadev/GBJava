@@ -2,6 +2,7 @@ package gbc.mooneye;
 
 import gbc.model.GameBoyColor;
 import gbc.model.cpu.Registers;
+import gbc.model.memory.Memory;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -38,11 +39,15 @@ class MooneyeAcceptanceTest {
         Assumptions.assumeTrue(Files.isDirectory(acceptanceRoot),
                 "Mooneye acceptance directory not found: " + acceptanceRoot);
 
+        String filter = System.getProperty("mooneye.only");
+
         try {
             return Files.walk(acceptanceRoot)
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".gb"))
                     .sorted(Comparator.comparing(path -> acceptanceRoot.relativize(path).toString()))
+                    .filter(path -> filter == null
+                            || acceptanceRoot.relativize(path).toString().contains(filter))
                     .map(path -> Arguments.of(acceptanceRoot.relativize(path).toString(), path));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -66,6 +71,7 @@ class MooneyeAcceptanceTest {
         gbc.insertCartridge(romPath.toString());
 
         Registers registers = gbc.getCpu().getRegisters();
+        Memory memory = gbc.getMemory();
         Instant start = Instant.now();
         long cycles = 0;
         long instructions = 0;
@@ -79,11 +85,11 @@ class MooneyeAcceptanceTest {
             instructions++;
 
             if (isPassState(registers)) {
-                return MooneyeResult.passed(cycles, instructions, registers);
+                return MooneyeResult.passed(cycles, instructions, registers, snapshotDebugState(memory, gbc));
             }
         }
 
-        return MooneyeResult.failed(cycles, instructions, registers);
+        return MooneyeResult.failed(cycles, instructions, registers, snapshotDebugState(memory, gbc));
     }
 
     private boolean isPassState(Registers registers) {
@@ -106,30 +112,89 @@ class MooneyeAcceptanceTest {
                 result.registers().getRegister("L") & 0xFF,
                 result.pc());
 
-        return "Mooneye test did not reach pass state: " + displayName
-                + " (" + romPath + ")\n"
-                + "cycles=" + result.cycles() + ", instructions=" + result.instructions()
-                + "\n" + registersDump;
-    }
+        StringBuilder sb = new StringBuilder();
+        sb.append("Mooneye test did not reach pass state: ")
+                .append(displayName)
+                .append(" (")
+                .append(romPath)
+                .append(")\n")
+                .append("cycles=")
+                .append(result.cycles())
+                .append(", instructions=")
+                .append(result.instructions())
+                .append("\n")
+                .append(registersDump);
 
-    private record MooneyeResult(boolean passed, long cycles, long instructions, Registers registers, int pc) {
-        static MooneyeResult passed(long cycles, long instructions, Registers registers) {
-            return new MooneyeResult(true, cycles, instructions, snapshot(registers), registers.getPC());
+        if (result.debugState() != null) {
+            DebugState debug = result.debugState();
+            sb.append("\nDIV=")
+                    .append(String.format("%02X", debug.div()))
+                    .append(" TIMA=")
+                    .append(String.format("%02X", debug.tima()))
+                    .append(" TMA=")
+                    .append(String.format("%02X", debug.tma()))
+                    .append(" TAC=")
+                    .append(String.format("%02X", debug.tac()))
+                    .append(" IF=")
+                    .append(String.format("%02X", debug.interruptFlags()))
+                    .append(" IE=")
+                    .append(String.format("%02X", debug.interruptEnable()))
+                    .append(" IME=")
+                    .append(debug.ime() ? 1 : 0)
+                    .append(" HALT=")
+                    .append(debug.halted() ? 1 : 0)
+                    .append(" LCDC=")
+                    .append(String.format("%02X", debug.lcdc()))
+                    .append(" STAT=")
+                    .append(String.format("%02X", debug.stat()))
+                    .append(" LY=")
+                    .append(String.format("%02X", debug.ly()))
+                    .append(" LYC=")
+                    .append(String.format("%02X", debug.lyc()));
         }
 
-        static MooneyeResult failed(long cycles, long instructions, Registers registers) {
-            return new MooneyeResult(false, cycles, instructions, snapshot(registers), registers.getPC());
+        return sb.toString();
+    }
+
+    private record MooneyeResult(boolean passed, long cycles, long instructions, Registers registers, int pc,
+            DebugState debugState) {
+        static MooneyeResult passed(long cycles, long instructions, Registers registers, DebugState debugState) {
+            return new MooneyeResult(true, cycles, instructions, snapshot(registers), registers.getPC(), debugState);
+        }
+
+        static MooneyeResult failed(long cycles, long instructions, Registers registers, DebugState debugState) {
+            return new MooneyeResult(false, cycles, instructions, snapshot(registers), registers.getPC(), debugState);
         }
 
         private static Registers snapshot(Registers source) {
-            Registers copy = new Registers();
-            copy.setAF(source.getAF());
-            copy.setBC(source.getBC());
-            copy.setDE(source.getDE());
-            copy.setHL(source.getHL());
-            copy.setPC(source.getPC());
-            copy.setSP(source.getSP());
-            return copy;
+            return source.copy();
         }
+    }
+
+    private DebugState snapshotDebugState(Memory memory, GameBoyColor gbc) {
+        try {
+            int div = memory.readByte(0xFF04) & 0xFF;
+            int tima = memory.readByte(0xFF05) & 0xFF;
+            int tma = memory.readByte(0xFF06) & 0xFF;
+            int tac = memory.readByte(0xFF07) & 0xFF;
+            int interruptFlags = memory.readByte(0xFF0F) & 0xFF;
+            int interruptEnable = memory.readByte(0xFFFF) & 0xFF;
+            boolean ime = gbc.getCpu().isIme();
+            boolean halted = gbc.getCpu().isHalted();
+
+            int lcdc = memory.readByte(0xFF40) & 0xFF;
+            int stat = memory.readByte(0xFF41) & 0xFF;
+            int ly = memory.readByte(0xFF44) & 0xFF;
+            int lyc = memory.readByte(0xFF45) & 0xFF;
+
+            return new DebugState(div, tima, tma, tac, interruptFlags, interruptEnable, ime, halted, lcdc, stat, ly,
+                    lyc);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private record DebugState(int div, int tima, int tma, int tac, int interruptFlags, int interruptEnable,
+            boolean ime, boolean halted, int lcdc, int stat, int ly, int lyc) {
     }
 }

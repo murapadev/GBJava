@@ -188,6 +188,75 @@ class CPUInstructionTest {
     }
 
     @Test
+    void haltBugAllowsImmediateFetchWithoutCrashing() {
+        loadProgram(0x76, 0x3E, 0x12, 0x00); // HALT, LD A, d8, padding
+        registers.setRegister("A", (byte) 0x00);
+
+        memory.writeByte(0xFFFF, 0x01); // Enable VBlank interrupt
+        memory.writeByte(0xFF0F, 0x01); // Request VBlank interrupt
+
+        cpu.executeCycle();
+
+        assertFalse(cpu.isHalted(), "Pending interrupt should wake HALT immediately");
+        assertTrue(cpu.isHaltBugTriggered(), "HALT bug flag should be raised after HALT");
+
+        int cycles = cpu.executeCycle();
+
+        assertEquals(8, cycles, "LD A, d8 should consume 8 cycles");
+        assertEquals(0x3E, registers.getRegister("A") & 0xFF,
+                "HALT bug should feed the opcode byte into the accumulator");
+        assertEquals(0x0102, registers.getPC(), "PC should advance by the instruction length");
+        assertFalse(cpu.isHaltBugTriggered(), "HALT bug flag should clear after the next fetch completes");
+    }
+
+    @Test
+    void stopWithPrepareSwitchesSpeedAndReloadsTimer() {
+        loadProgram(0x10, 0x00); // STOP, padding byte
+
+        cpu.setPrepareSpeedSwitch(true);
+        cpu.setDoubleSpeedMode(false);
+
+        memory.writeByte(0xFF06, 0xAB); // TMA
+        memory.writeByte(0xFF05, 0x01); // TIMA before reload
+        memory.stepPeripherals(32);
+
+        cpu.executeCycle();
+
+        assertTrue(cpu.isDoubleSpeedMode(), "Speed switch should enable double-speed mode");
+        assertFalse(cpu.isPrepareSpeedSwitch(), "Prepare bit must clear after switching speed");
+        assertEquals(0xAB, memory.readByte(0xFF05) & 0xFF, "TIMA should reload from TMA on speed switch");
+        assertEquals(0, memory.readByte(0xFF04) & 0xFF, "DIV register should reset when switching speed");
+    }
+
+    @Test
+    void stopWithoutPrepareLeavesSpeedUnchanged() {
+        loadProgram(0x10, 0x00); // STOP, padding byte
+
+        cpu.setDoubleSpeedMode(true);
+        cpu.setPrepareSpeedSwitch(false);
+
+        cpu.executeCycle();
+
+        assertTrue(cpu.isDoubleSpeedMode(), "Without prepare bit, STOP must not toggle speed");
+    }
+
+    @Test
+    void cycleCountsRemainStableInDoubleSpeedMode() {
+        loadProgram(0x00); // NOP
+
+        int normalCycles = cpu.executeCycle();
+        assertEquals(4, normalCycles, "NOP should take 4 cycles in normal speed");
+
+        loadProgram(0x00); // reset and run again in double-speed mode
+        cpu.setDoubleSpeedMode(true);
+
+        int doubleSpeedCycles = cpu.executeCycle();
+
+        assertEquals(normalCycles, doubleSpeedCycles,
+                "Cycle counts returned by executeCycle must be consistent in double-speed mode");
+    }
+
+    @Test
     void jrNzTakenUsesCorrectCycles() {
         loadProgram(0x20, 0x05); // JR NZ, +5
         registers.setRegister("F", (byte) 0); // Z=0, so taken

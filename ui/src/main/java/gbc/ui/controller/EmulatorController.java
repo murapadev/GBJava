@@ -100,6 +100,7 @@ public class EmulatorController {
             try {
                 view.setVisible(true);
                 view.repaint();
+                view.onPauseStateChanged(false);
             } catch (Exception e) {
                 System.err.println("Error showing UI: " + e.getMessage());
                 e.printStackTrace();
@@ -208,7 +209,8 @@ public class EmulatorController {
                     if (cycleCount > 100000) {
                         System.err.println("WARNING: Too many cycles in frame (" + cycleCount + ")");
                         System.err.println("Executed cycles: " + executedCycles + ", Target: " + cyclesPerFrame);
-                        System.err.println("Last PC: " + String.format("0x%04X", (int) gbc.getCpu().getRegisters().getPC()));
+                        System.err.println(
+                                "Last PC: " + String.format("0x%04X", (int) gbc.getCpu().getRegisters().getPC()));
                         break;
                     }
 
@@ -364,7 +366,23 @@ public class EmulatorController {
             gbc.resume();
         }
         audioEngine.setPaused(desired);
+        SwingUtilities.invokeLater(() -> view.onPauseStateChanged(desired));
         return previous;
+    }
+
+    public void stepInstruction() {
+        setPaused(true);
+        emulationLock.lock();
+        try {
+            gbc.executeCycle();
+        } finally {
+            emulationLock.unlock();
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            view.update();
+            view.setStatusText(String.format("Stepped - PC: $%04X", gbc.getCpu().getRegisters().getPC()));
+        });
     }
 
     public void stop() {

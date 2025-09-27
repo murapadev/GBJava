@@ -167,4 +167,19 @@ public class Registers {
 				"PC: " + PC + "\n" +
 				"SP: " + SP + "\n";
 	}
+
+	public Registers copy() {
+		Registers copy = new Registers();
+		copy.A = this.A;
+		copy.B = this.B;
+		copy.C = this.C;
+		copy.D = this.D;
+		copy.E = this.E;
+		copy.F = this.F;
+		copy.H = this.H;
+		copy.L = this.L;
+		copy.PC = this.PC;
+		copy.SP = this.SP;
+		return copy;
+	}
 }

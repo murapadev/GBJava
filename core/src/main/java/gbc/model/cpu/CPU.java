@@ -10,6 +10,12 @@ public class CPU {
     private Interruptions interruptions;
     private OperationsLoader operationsLoader;
 
+    private static final boolean TRACE_ENABLED = Boolean.getBoolean("gbc.cpu.trace");
+    private static final int TRACE_START = Integer.getInteger("gbc.cpu.trace.start", 0);
+    private static final int TRACE_END = Integer.getInteger("gbc.cpu.trace.end", 0xFFFF);
+    private static final long TRACE_LIMIT = Long.getLong("gbc.cpu.trace.limit", Long.MAX_VALUE);
+    private long traceCount = 0;
+
     private int cycles;
     private StringBuilder opcodeLog;
 
@@ -19,7 +25,7 @@ public class CPU {
 
     // Interrupt handling
     private boolean ime; // Interrupt Master Enable flag
-    private boolean imePending; // EI has delayed effect - enables IME after next instruction
+    private int imeEnableDelay; // EI has delayed effect - enables IME after next instruction
 
     // Track whether last conditional control-flow instruction took its branch
     private boolean lastConditionTaken;
@@ -27,7 +33,8 @@ public class CPU {
     // HALT state
     private boolean halted = false;
     private boolean haltBugTriggered = false;
-    private boolean skipNextInterrupt = false;
+    private boolean haltBugPendingFetch = false;
+    private boolean haltBugDeferredIncrement = false;
 
     public CPU(Memory memory) {
         this.memory = memory;
@@ -42,7 +49,7 @@ public class CPU {
 
         // Initialize interrupt flags
         this.ime = false;
-        this.imePending = false;
+        this.imeEnableDelay = 0;
 
         // Set CPU reference in memory for I/O register access
         memory.setCPU(this);
@@ -91,10 +98,11 @@ public class CPU {
 
         // Reset interrupt flags
         ime = false;
-        imePending = false;
+        imeEnableDelay = 0;
         halted = false;
         haltBugTriggered = false;
-        skipNextInterrupt = false;
+        haltBugPendingFetch = false;
+        haltBugDeferredIncrement = false;
         lastConditionTaken = false;
     }
 
@@ -104,47 +112,113 @@ public class CPU {
             return 0;
         }
 
-        handleInterrupts();
+        int interruptCycles = handleInterrupts();
+        if (interruptCycles > 0) {
+            memory.stepPeripherals(interruptCycles);
+            cycles += interruptCycles;
+            return interruptCycles;
+        }
         int cyclesExecuted = 0;
+        boolean executedInstruction = false;
 
         if (!halted) {
+            int instructionPc = registers.getPC();
             int opcode = fetchByte();
 
-            // FIXME: Add instruction debugging to detect problematic opcodes
-            // Track the last few opcodes executed to identify freeze causes
-            // Temporarily disabled for performance
-            // if (cycles % 10000 == 0) { // Every 10000 cycles (reduced frequency)
-            // System.out.println(String.format("PC: 0x%04X, Opcode: 0x%02X, Cycles: %d",
-            // (int) registers.getPC(), opcode, cycles));
-            // }
-
-            // FIXME: Add better debugging - enable this temporarily to debug freeze
             if (DEBUG_LOG && cycles % 1000 == 0) { // Every 1000 cycles
                 System.out.println(String.format("DEBUG: PC=0x%04X, Opcode=0x%02X, SP=0x%04X, Cycles=%d",
                         (int) registers.getPC(), opcode, (int) registers.getSP(), cycles));
             }
 
-            // Handle CB-prefixed operations
-            if (opcode == 0xCB) {
-                int cbOpcode = fetchByte();
-                executeCBInstruction(cbOpcode);
-                cyclesExecuted = updateCyclesCB(cbOpcode);
+            boolean cbPrefixed = opcode == 0xCB;
+            int cbOpcode = -1;
+            Operation operation;
+
+            if (cbPrefixed) {
+                cbOpcode = fetchByte();
+                operation = operationsLoader.getCbOperation(cbOpcode);
             } else {
-                executeInstruction(opcode);
-                cyclesExecuted = updateCycles(opcode);
+                operation = operationsLoader.getOperation(opcode);
             }
+
+            int baseCycles;
+            if (operation != null && !operation.getCycles().isEmpty()) {
+                baseCycles = operation.getCycles().get(0);
+            } else {
+                baseCycles = cbPrefixed ? 8 : 4;
+            }
+
+            cyclesExecuted = 0;
+
+            int preCycles = Math.max(0, baseCycles - 4);
+            if (preCycles > 0) {
+                memory.stepPeripherals(preCycles);
+                cycles += preCycles;
+                cyclesExecuted += preCycles;
+            }
+
+            setLastConditionTaken(false);
+
+            if (operation != null) {
+                operation.perform(registers, memory);
+            } else {
+                System.err.println(String.format("ERROR: No %s operation found for opcode 0x%02X at PC=0x%04X",
+                        cbPrefixed ? "CB" : "", cbPrefixed ? cbOpcode : opcode, (int) registers.getPC()));
+            }
+
+            int postCycles = baseCycles - preCycles;
+            if (postCycles > 0) {
+                memory.stepPeripherals(postCycles);
+                cycles += postCycles;
+                cyclesExecuted += postCycles;
+            }
+
+            int totalCycles = cbPrefixed ? updateCyclesCB(cbOpcode) : updateCycles(opcode);
+            int extraCycles = Math.max(0, totalCycles - baseCycles);
+            if (extraCycles > 0) {
+                memory.stepPeripherals(extraCycles);
+                cycles += extraCycles;
+                cyclesExecuted += extraCycles;
+            }
+
+            if (TRACE_ENABLED && traceCount < TRACE_LIMIT) {
+                int pcToReport = instructionPc & 0xFFFF;
+                if (pcToReport >= TRACE_START && pcToReport <= TRACE_END) {
+                    traceCount++;
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("[CPU ")
+                            .append(cycles)
+                            .append("T] PC=")
+                            .append(String.format("%04X", pcToReport))
+                            .append(" OP=")
+                            .append(String.format("%02X", opcode));
+                    if (cbPrefixed) {
+                        sb.append(" CB=")
+                                .append(String.format("%02X", cbOpcode));
+                    }
+                    sb.append(" base=")
+                            .append(baseCycles)
+                            .append(" extra=")
+                            .append(extraCycles)
+                            .append(" total=")
+                            .append(baseCycles + extraCycles)
+                            .append(" IME=")
+                            .append(ime ? 1 : 0)
+                            .append(" HALT=")
+                            .append(halted ? 1 : 0);
+                    System.out.println(sb.toString());
+                }
+            }
+
+            executedInstruction = true;
         } else {
             cyclesExecuted = 4; // HALT consumes 4 cycles
+            memory.stepPeripherals(cyclesExecuted);
+            cycles += cyclesExecuted;
         }
 
-        // Step peripherals with base cycles (before double-speed multiplication)
-        memory.stepPeripherals(cyclesExecuted);
-
-        cycles += cyclesExecuted;
-
-        // In double speed mode, CPU runs at 2x speed, so cycles are doubled for timing
-        if (doubleSpeedMode) {
-            cyclesExecuted *= 2;
+        if (executedInstruction) {
+            finalizeInstructionExecution();
         }
 
         return cyclesExecuted;
@@ -155,60 +229,31 @@ public class CPU {
         return memory.isCartridgeLoaded();
     }
 
-    private void handleInterrupts() {
+    private int handleInterrupts() {
         // Handle EI delayed effect
-        if (imePending) {
-            ime = true;
-            imePending = false;
-            if (haltBugTriggered) {
-                skipNextInterrupt = true;
-                haltBugTriggered = false;
-            }
-        }
+        boolean pendingInterrupt = interruptions.hasPendingInterrupt();
 
-        // Check for interrupts if IME is enabled
-        if (ime) {
-            if (skipNextInterrupt) {
-                skipNextInterrupt = false;
-                return;
-            }
-            if (interruptions.handleInterrupts()) {
+        // If interrupts are disabled, we still need to wake from HALT when a request
+        // arrives
+        if (!ime) {
+            if (halted && pendingInterrupt) {
                 halted = false;
             }
+            return 0;
         }
-    }
 
-    private void executeInstruction(int opcode) {
-        Operation operation = operationsLoader.getOperation(opcode);
-        if (operation != null) {
-            operation.perform(registers, memory);
-            // opcodeLog.append(String.format("PC: 0x%04X, Opcode: 0x%02X\n", (int)
-            // registers.getPC(), opcode));
-        } else {
-            // FIXME: Handle missing operations to prevent freeze
-            System.err.println(String.format("ERROR: No operation found for opcode 0x%02X at PC=0x%04X",
-                    opcode, (int) registers.getPC()));
-            // At least advance PC to prevent infinite loop
-            registers.incrementPC();
+        if (pendingInterrupt && interruptions.handleInterrupts()) {
+            halted = false;
+            return 20; // 5 machine cycles
         }
-    }
-
-    private void executeCBInstruction(int cbOpcode) {
-        Operation operation = operationsLoader.getCbOperation(cbOpcode);
-        if (operation != null) {
-            operation.perform(registers, memory);
-            // opcodeLog.append(String.format("PC: 0x%04X, CB Opcode: 0x%02X\n", (int)
-            // registers.getPC(), cbOpcode));
-        } else {
-            // FIXME: Handle missing CB operations to prevent freeze
-            System.err.println(String.format("ERROR: No CB operation found for opcode 0x%02X at PC=0x%04X",
-                    cbOpcode, (int) registers.getPC()));
-            // At least advance PC to prevent infinite loop
-            registers.incrementPC();
-        }
+        return 0;
     }
 
     private int updateCycles(int opcode) {
+        if (opcode == 0xCB) {
+            int cbOpcode = memory.readByte(registers.getPC() - 1); // Reread CB opcode
+            return updateCyclesCB(cbOpcode);
+        }
         Operation operation = operationsLoader.getOperation(opcode);
         if (operation != null) {
             // If multiple cycle variants exist (conditional), select based on branch taken
@@ -229,8 +274,23 @@ public class CPU {
     }
 
     private int fetchByte() {
-        int value = memory.readByte(registers.getPC()) & 0xFF;
+        if (haltBugDeferredIncrement) {
+            registers.incrementPC();
+            haltBugDeferredIncrement = false;
+        }
+
+        int pc = registers.getPC();
+        int value = memory.readByte(pc) & 0xFF;
+
         registers.incrementPC();
+
+        if (haltBugPendingFetch) {
+            registers.setPC((registers.getPC() - 1) & 0xFFFF);
+            haltBugPendingFetch = false;
+            haltBugDeferredIncrement = true;
+            haltBugTriggered = false;
+        }
+
         return value;
     }
 
@@ -296,11 +356,15 @@ public class CPU {
     }
 
     public boolean isImePending() {
-        return imePending;
+        return imeEnableDelay > 0;
     }
 
     public void setImePending(boolean imePending) {
-        this.imePending = imePending;
+        if (imePending) {
+            imeEnableDelay = 2;
+        } else {
+            imeEnableDelay = 0;
+        }
     }
 
     public boolean wasLastConditionTaken() {
@@ -325,6 +389,19 @@ public class CPU {
 
     public void setHaltBugTriggered(boolean haltBugTriggered) {
         this.haltBugTriggered = haltBugTriggered;
+        this.haltBugPendingFetch = haltBugTriggered;
+        if (!haltBugTriggered) {
+            haltBugDeferredIncrement = false;
+        }
+    }
+
+    private void finalizeInstructionExecution() {
+        if (imeEnableDelay > 0) {
+            imeEnableDelay--;
+            if (imeEnableDelay == 0) {
+                ime = true;
+            }
+        }
     }
 
     // Other methods...
