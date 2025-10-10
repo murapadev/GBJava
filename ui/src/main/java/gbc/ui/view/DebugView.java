@@ -1,17 +1,23 @@
 package gbc.ui.view;
 
 import gbc.model.GameBoyColor;
-import gbc.model.memory.Memory;
 import gbc.model.cpu.CPU;
+import gbc.model.cpu.Disassembler;
+import gbc.model.cpu.Disassembler.DecodedInstruction;
+import gbc.model.memory.Memory;
+import gbc.ui.controller.EmulatorController;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Debug View with hexadecimal memory viewer, disassembler, and debugging tools
@@ -21,6 +27,7 @@ public class DebugView extends JFrame {
     private final GameBoyColor gbc;
     private final CPU cpu;
     private final Memory memory;
+    private EmulatorController controller;
 
     // Components
     private JTabbedPane tabbedPane;
@@ -30,14 +37,24 @@ public class DebugView extends JFrame {
     private BreakpointPanel breakpointPanel;
     private MemorySearchPanel memorySearchPanel;
 
-    // Control buttons
+    // Control components
+    private JToolBar controlToolbar;
     private JButton stepButton;
     private JButton runButton;
     private JButton pauseButton;
     private JButton resetButton;
+    private JButton jumpToPcButton;
+    private JToggleButton autoRefreshToggle;
+
+    private Timer autoRefreshTimer;
 
     // Status
     private JLabel statusLabel;
+    private JLabel pcStatusLabel;
+    private JLabel spStatusLabel;
+    private JLabel imeStatusLabel;
+    private JLabel haltStatusLabel;
+    private JLabel speedModeStatusLabel;
 
     public DebugView(GameBoyColor gbc) {
         this.gbc = gbc;
@@ -52,6 +69,7 @@ public class DebugView extends JFrame {
         initializeComponents();
         setupLayout();
         setupEventHandlers();
+        updateStatusIndicators();
     }
 
     private void initializeComponents() {
@@ -63,38 +81,61 @@ public class DebugView extends JFrame {
         breakpointPanel = new BreakpointPanel();
         memorySearchPanel = new MemorySearchPanel();
 
+        JPanel overview = createOverviewPanel();
+        tabbedPane.addTab("Overview", overview);
         tabbedPane.addTab("Memory", memoryViewer);
-        tabbedPane.addTab("Disassembler", disassemblerPanel);
-        tabbedPane.addTab("Registers", registerPanel);
-        tabbedPane.addTab("Breakpoints", breakpointPanel);
-        tabbedPane.addTab("Memory Search", memorySearchPanel);
 
-        // Control buttons
-        stepButton = new JButton("Step");
-        runButton = new JButton("Run");
-        pauseButton = new JButton("Pause");
-        resetButton = new JButton("Reset");
+        controlToolbar = new JToolBar();
+        controlToolbar.setFloatable(false);
+        controlToolbar.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+
+        stepButton = createToolbarButton("Step", "Execute one CPU instruction (F7)");
+        runButton = createToolbarButton("Run", "Resume continuous execution (F5)");
+        pauseButton = createToolbarButton("Pause", "Pause execution (F6)");
+        resetButton = createToolbarButton("Reset", "Reset emulator state (Ctrl+R)");
+        jumpToPcButton = createToolbarButton("Jump to PC", "Center views around the current program counter");
+
+        autoRefreshToggle = new JToggleButton("Auto Refresh");
+        configureToolbarToggle(autoRefreshToggle, "Continuously refresh while running");
+
+        controlToolbar.add(stepButton);
+        controlToolbar.add(runButton);
+        controlToolbar.add(pauseButton);
+        controlToolbar.add(resetButton);
+        controlToolbar.addSeparator();
+        controlToolbar.add(jumpToPcButton);
+        controlToolbar.add(autoRefreshToggle);
+
+        autoRefreshTimer = new Timer(250, e -> updateAllViews());
+        autoRefreshTimer.setRepeats(true);
 
         statusLabel = new JLabel("Debug Mode Ready");
+        pcStatusLabel = new JLabel("PC: ----");
+        spStatusLabel = new JLabel("SP: ----");
+        imeStatusLabel = new JLabel("IME: --");
+        haltStatusLabel = new JLabel("HALT: --");
+        speedModeStatusLabel = new JLabel("Speed: Normal");
     }
 
     private void setupLayout() {
         setLayout(new BorderLayout());
 
-        // Control panel
-        JPanel controlPanel = new JPanel(new FlowLayout());
-        controlPanel.add(stepButton);
-        controlPanel.add(runButton);
-        controlPanel.add(pauseButton);
-        controlPanel.add(resetButton);
-
-        add(controlPanel, BorderLayout.NORTH);
+        add(controlToolbar, BorderLayout.NORTH);
         add(tabbedPane, BorderLayout.CENTER);
 
         // Status panel
         JPanel statusPanel = new JPanel(new BorderLayout());
         statusPanel.setBorder(BorderFactory.createLoweredBevelBorder());
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
         statusPanel.add(statusLabel, BorderLayout.WEST);
+
+        JPanel metricsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 16, 2));
+        metricsPanel.add(pcStatusLabel);
+        metricsPanel.add(spStatusLabel);
+        metricsPanel.add(imeStatusLabel);
+        metricsPanel.add(haltStatusLabel);
+        metricsPanel.add(speedModeStatusLabel);
+        statusPanel.add(metricsPanel, BorderLayout.EAST);
         add(statusPanel, BorderLayout.SOUTH);
     }
 
@@ -103,29 +144,68 @@ public class DebugView extends JFrame {
         runButton.addActionListener(e -> startExecution());
         pauseButton.addActionListener(e -> pauseExecution());
         resetButton.addActionListener(e -> resetEmulator());
+        jumpToPcButton.addActionListener(e -> jumpToProgramCounter());
+        autoRefreshToggle.addActionListener(e -> toggleAutoRefresh());
+
+        bindKeyboardShortcuts();
     }
 
     private void stepExecution() {
-        // Execute one instruction
-        gbc.executeCycle();
+        if (controller != null) {
+            controller.stepInstruction();
+        } else {
+            gbc.executeCycle();
+        }
         updateAllViews();
         statusLabel.setText("Stepped - PC: $" + Integer.toHexString(cpu.getRegisters().getPC()).toUpperCase());
     }
 
     private void startExecution() {
+        if (controller != null) {
+            controller.resume();
+        } else {
+            gbc.resume();
+        }
+        reflectPauseState(false);
         statusLabel.setText("Running...");
-        // This would need integration with the main emulator loop
     }
 
     private void pauseExecution() {
+        if (controller != null) {
+            controller.pause();
+        } else {
+            gbc.pause();
+        }
+        reflectPauseState(true);
         statusLabel.setText("Paused");
         updateAllViews();
     }
 
     private void resetEmulator() {
-        gbc.reset();
+        if (controller != null) {
+            controller.reset();
+        } else {
+            gbc.reset();
+        }
         updateAllViews();
         statusLabel.setText("Reset - PC: $" + Integer.toHexString(cpu.getRegisters().getPC()).toUpperCase());
+    }
+
+    public void setController(EmulatorController controller) {
+        this.controller = controller;
+        reflectPauseState(controller != null ? controller.isPaused() : gbc.isPaused());
+    }
+
+    public void reflectPauseState(boolean paused) {
+        SwingUtilities.invokeLater(() -> {
+            stepButton.setEnabled(paused);
+            runButton.setEnabled(paused);
+            pauseButton.setEnabled(!paused);
+            if (paused) {
+                statusLabel.setText("Paused");
+            }
+            updateStatusIndicators();
+        });
     }
 
     public void updateAllViews() {
@@ -133,7 +213,145 @@ public class DebugView extends JFrame {
             memoryViewer.refresh();
             disassemblerPanel.refresh();
             registerPanel.refresh();
+            updateStatusIndicators();
             repaint();
+        }
+    }
+
+    private JPanel createOverviewPanel() {
+        JSplitPane verticalSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        verticalSplit.setResizeWeight(0.6);
+        verticalSplit.setBorder(null);
+        verticalSplit.setTopComponent(disassemblerPanel);
+
+        JSplitPane bottomSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        bottomSplit.setResizeWeight(0.5);
+        bottomSplit.setBorder(null);
+        bottomSplit.setLeftComponent(registerPanel);
+
+        JTabbedPane detailTabs = new JTabbedPane();
+        detailTabs.addTab("Breakpoints", breakpointPanel);
+        detailTabs.addTab("Memory Search", memorySearchPanel);
+        bottomSplit.setRightComponent(detailTabs);
+
+        verticalSplit.setBottomComponent(bottomSplit);
+
+        JPanel container = new JPanel(new BorderLayout());
+        container.add(verticalSplit, BorderLayout.CENTER);
+
+        SwingUtilities.invokeLater(() -> {
+            verticalSplit.setDividerLocation(0.6);
+            bottomSplit.setDividerLocation(0.5);
+        });
+
+        return container;
+    }
+
+    private JButton createToolbarButton(String text, String tooltip) {
+        JButton button = new JButton(text);
+        button.setFocusPainted(false);
+        button.setToolTipText(tooltip);
+        return button;
+    }
+
+    private void configureToolbarToggle(JToggleButton toggle, String tooltip) {
+        toggle.setFocusPainted(false);
+        toggle.setToolTipText(tooltip);
+    }
+
+    private void toggleAutoRefresh() {
+        if (autoRefreshToggle.isSelected()) {
+            if (isVisible()) {
+                autoRefreshTimer.start();
+            }
+            updateAllViews();
+            statusLabel.setText("Auto refresh enabled");
+        } else {
+            autoRefreshTimer.stop();
+            statusLabel.setText("Auto refresh disabled");
+        }
+    }
+
+    private void jumpToProgramCounter() {
+        if (!memory.isCartridgeLoaded()) {
+            statusLabel.setText("No cartridge loaded");
+            return;
+        }
+
+        int pc = cpu.getRegisters().getPC() & 0xFFFF;
+        memoryViewer.showAddress(pc);
+        disassemblerPanel.refresh();
+        disassemblerPanel.scrollToAddress(pc);
+        updateStatusIndicators();
+        statusLabel.setText(String.format("Centered on PC $%04X", pc));
+    }
+
+    private void bindKeyboardShortcuts() {
+        registerShortcut("debug.step", KeyStroke.getKeyStroke(KeyEvent.VK_F7, 0), this::stepExecution);
+        registerShortcut("debug.run", KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), this::startExecution);
+        registerShortcut("debug.pause", KeyStroke.getKeyStroke(KeyEvent.VK_F6, 0), this::pauseExecution);
+        registerShortcut("debug.reset", KeyStroke.getKeyStroke(KeyEvent.VK_R, KeyEvent.CTRL_DOWN_MASK),
+                this::resetEmulator);
+        registerShortcut("debug.jump", KeyStroke.getKeyStroke(KeyEvent.VK_F8, 0), this::jumpToProgramCounter);
+    }
+
+    private void registerShortcut(String name, KeyStroke keyStroke, Runnable action) {
+        JRootPane rootPane = getRootPane();
+        InputMap inputMap = rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = rootPane.getActionMap();
+
+        inputMap.put(keyStroke, name);
+        actionMap.put(name, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                action.run();
+            }
+        });
+    }
+
+    private void updateStatusIndicators() {
+        if (!memory.isCartridgeLoaded()) {
+            pcStatusLabel.setText("PC: ----");
+            spStatusLabel.setText("SP: ----");
+            imeStatusLabel.setText("IME: --");
+            haltStatusLabel.setText("HALT: --");
+            haltStatusLabel.setForeground(Color.DARK_GRAY);
+            speedModeStatusLabel.setText("Speed: Normal");
+            speedModeStatusLabel.setForeground(Color.DARK_GRAY);
+            return;
+        }
+
+        int pc = cpu.getRegisters().getPC() & 0xFFFF;
+        int sp = cpu.getRegisters().getSP() & 0xFFFF;
+        boolean ime = cpu.isIme();
+        boolean halted = cpu.isHalted();
+        boolean doubleSpeed = cpu.isDoubleSpeedMode();
+
+        pcStatusLabel.setText(String.format("PC: $%04X", pc));
+        spStatusLabel.setText(String.format("SP: $%04X", sp));
+        imeStatusLabel.setText("IME: " + (ime ? "ON" : "OFF"));
+        imeStatusLabel.setForeground(ime ? new Color(0, 128, 0) : Color.RED.darker());
+        haltStatusLabel.setText(halted ? "HALT" : "RUN");
+        haltStatusLabel.setForeground(halted ? Color.RED.darker() : new Color(0, 128, 0));
+        speedModeStatusLabel.setText(doubleSpeed ? "Speed: Double" : "Speed: Normal");
+        speedModeStatusLabel.setForeground(doubleSpeed ? new Color(0, 102, 204) : Color.DARK_GRAY);
+    }
+
+    @Override
+    public void setVisible(boolean visible) {
+        super.setVisible(visible);
+        if (visible) {
+            updateStatusIndicators();
+            if (autoRefreshToggle != null && autoRefreshToggle.isSelected()) {
+                autoRefreshTimer.start();
+            }
+        } else {
+            if (autoRefreshTimer != null) {
+                autoRefreshTimer.stop();
+            }
+            if (autoRefreshToggle != null) {
+                autoRefreshToggle.setSelected(false);
+            }
         }
     }
 
@@ -152,6 +370,11 @@ public class DebugView extends JFrame {
             memoryTable = new JTable(memoryTableModel);
             memoryTable.setFont(new Font("Monospaced", Font.PLAIN, 12));
             memoryTable.setDefaultRenderer(Object.class, new MemoryTableCellRenderer());
+            memoryTable.setFillsViewportHeight(true);
+            memoryTable.setRowSelectionAllowed(true);
+            memoryTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            memoryTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+            memoryTable.getTableHeader().setReorderingAllowed(false);
 
             // Setup column widths
             memoryTable.getColumnModel().getColumn(0).setPreferredWidth(80); // Address
@@ -188,6 +411,25 @@ public class DebugView extends JFrame {
             refresh();
         }
 
+        public void showAddress(int address) {
+            currentAddress = address & 0xFFFF;
+            refresh();
+
+            SwingUtilities.invokeLater(() -> {
+                int baseAddress = memoryTableModel.getBaseAddress();
+                int colsPerRow = memoryTableModel.getColumnsPerRow();
+                int offset = ((address & 0xFFFF) - baseAddress);
+                if (offset < 0) {
+                    offset += 0x10000;
+                }
+                int targetRow = offset / colsPerRow;
+                targetRow = Math.max(0, Math.min(memoryTable.getRowCount() - 1, targetRow));
+                memoryTable.getSelectionModel().setSelectionInterval(targetRow, targetRow);
+                Rectangle cellRect = memoryTable.getCellRect(targetRow, 0, true);
+                memoryTable.scrollRectToVisible(cellRect);
+            });
+        }
+
         private void gotoAddress() {
             try {
                 String addressText = addressField.getText().trim();
@@ -195,7 +437,7 @@ public class DebugView extends JFrame {
                     addressText = addressText.substring(1);
                 }
                 currentAddress = Integer.parseInt(addressText, 16) & 0xFFFF;
-                refresh();
+                showAddress(currentAddress);
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(this, "Invalid address format", "Error", JOptionPane.ERROR_MESSAGE);
             }
@@ -215,6 +457,14 @@ public class DebugView extends JFrame {
 
         public void setBaseAddress(int address) {
             this.baseAddress = address & 0xFFF0; // Align to 16-byte boundary
+        }
+
+        public int getBaseAddress() {
+            return baseAddress;
+        }
+
+        public int getColumnsPerRow() {
+            return COLS_PER_ROW;
         }
 
         @Override
@@ -262,6 +512,12 @@ public class DebugView extends JFrame {
 
     // Custom cell renderer for memory table
     private class MemoryTableCellRenderer extends DefaultTableCellRenderer {
+        private final Color addressBackground = new Color(230, 240, 255);
+        private final Color asciiBackground = new Color(240, 255, 240);
+        private final Color dataBackground = Color.WHITE;
+        private final Color pcHighlight = new Color(255, 250, 205);
+        private final Color breakpointHighlight = new Color(255, 220, 220);
+
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
@@ -269,20 +525,47 @@ public class DebugView extends JFrame {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
             if (!isSelected) {
+                int baseAddress = memoryViewer.memoryTableModel.getBaseAddress();
+                int colsPerRow = memoryViewer.memoryTableModel.getColumnsPerRow();
+                int rowStart = (baseAddress + row * colsPerRow) & 0xFFFF;
+                int rowEnd = (rowStart + colsPerRow - 1) & 0xFFFF;
+                int pc = cpu.getRegisters().getPC() & 0xFFFF;
+
+                boolean rowContainsPc = containsAddress(rowStart, rowEnd, pc);
+                boolean rowContainsBreakpoint = breakpointPanel != null
+                        && breakpointPanel.hasBreakpointInRange(rowStart, rowEnd);
+
                 if (column == 0) {
-                    // Address column - light blue background
-                    c.setBackground(new Color(230, 240, 255));
+                    c.setBackground(rowContainsPc ? pcHighlight
+                            : rowContainsBreakpoint ? breakpointHighlight.brighter() : addressBackground);
                 } else if (column == 17) {
-                    // ASCII column - light green background
-                    c.setBackground(new Color(240, 255, 240));
+                    c.setBackground(rowContainsPc ? pcHighlight
+                            : rowContainsBreakpoint ? breakpointHighlight.brighter() : asciiBackground);
                 } else {
-                    // Data columns - white background
-                    c.setBackground(Color.WHITE);
+                    int byteAddress = (rowStart + (column - 1)) & 0xFFFF;
+                    if (byteAddress == pc) {
+                        c.setBackground(pcHighlight);
+                    } else if (breakpointPanel != null && breakpointPanel.hasBreakpoint(byteAddress)) {
+                        c.setBackground(breakpointHighlight);
+                    } else {
+                        c.setBackground(dataBackground);
+                    }
                 }
             }
 
-            setHorizontalAlignment(SwingConstants.CENTER);
+            if (column == 0 || column == 17) {
+                setHorizontalAlignment(SwingConstants.LEFT);
+            } else {
+                setHorizontalAlignment(SwingConstants.CENTER);
+            }
             return c;
+        }
+
+        private boolean containsAddress(int start, int end, int value) {
+            if (start <= end) {
+                return value >= start && value <= end;
+            }
+            return value >= start || value <= end;
         }
     }
 
@@ -313,32 +596,49 @@ public class DebugView extends JFrame {
             }
 
             currentPC = cpu.getRegisters().getPC();
+            int startAddr = Math.max(0, currentPC - 32) & 0xFFFF;
+            int maxBytes = 256;
+            int addr = startAddr;
+            int bytesDecoded = 0;
+            int lineIndex = 0;
             StringBuilder sb = new StringBuilder();
+            Map<Integer, Integer> lineByAddress = new HashMap<>();
 
-            // Disassemble instructions around PC
-            int startAddr = Math.max(0, currentPC - 0x20);
-            int endAddr = Math.min(0xFFFF, currentPC + 0x40);
+            while (bytesDecoded < maxBytes) {
+                DecodedInstruction decoded = Disassembler.decode(memory, addr);
+                int length = Math.max(1, decoded.getLength());
+                boolean isPc = addr == currentPC;
+                boolean isBreakpoint = breakpointPanel != null && breakpointPanel.hasBreakpoint(addr);
 
-            for (int addr = startAddr; addr <= endAddr; addr++) {
-                if (addr == currentPC) {
-                    sb.append(">>> ");
-                } else {
-                    sb.append("    ");
+                String pcMarker = isPc ? ">" : " ";
+                String breakpointMarker = isBreakpoint ? "*" : " ";
+
+                sb.append(String.format("%s %s %04X: %s%n", pcMarker, breakpointMarker, addr, decoded.getText()));
+                lineByAddress.put(addr, lineIndex);
+
+                bytesDecoded += length;
+                addr = (addr + length) & 0xFFFF;
+                lineIndex++;
+
+                if (addr == startAddr) {
+                    break; // Prevent infinite loop if we wrapped around memory
                 }
-
-                int opcode = memory.readByte(addr) & 0xFF;
-                String instruction = disassembleInstruction(addr, opcode);
-                sb.append(String.format("%04X: %s%n", addr, instruction));
             }
 
             disassemblyArea.setText(sb.toString());
 
             // Scroll to current PC
             SwingUtilities.invokeLater(() -> {
-                int pcLine = (currentPC - startAddr);
+                Integer pcLine = lineByAddress.get(currentPC);
+                if (pcLine == null) {
+                    return;
+                }
                 try {
                     int lineStart = disassemblyArea.getLineStartOffset(pcLine);
+                    int lineEnd = Math.min(disassemblyArea.getDocument().getLength(),
+                            disassemblyArea.getLineEndOffset(pcLine));
                     disassemblyArea.setCaretPosition(lineStart);
+                    disassemblyArea.select(lineStart, lineEnd);
                 } catch (Exception e) {
                     // Ignore
                 }
@@ -349,65 +649,25 @@ public class DebugView extends JFrame {
             return memory.isCartridgeLoaded();
         }
 
-        private String disassembleInstruction(int address, int opcode) {
-            // Simple disassembly - this should be expanded with full instruction set
-            switch (opcode) {
-                case 0x00:
-                    return "NOP";
-                case 0x01:
-                    return String.format("LD BC, $%04X", read16(address + 1));
-                case 0x02:
-                    return "LD (BC), A";
-                case 0x03:
-                    return "INC BC";
-                case 0x04:
-                    return "INC B";
-                case 0x05:
-                    return "DEC B";
-                case 0x06:
-                    return String.format("LD B, $%02X", memory.readByte(address + 1) & 0xFF);
-                case 0x07:
-                    return "RLCA";
-                case 0x08:
-                    return String.format("LD ($%04X), SP", read16(address + 1));
-                case 0x09:
-                    return "ADD HL, BC";
-                case 0x0A:
-                    return "LD A, (BC)";
-                case 0x0B:
-                    return "DEC BC";
-                case 0x0C:
-                    return "INC C";
-                case 0x0D:
-                    return "DEC C";
-                case 0x0E:
-                    return String.format("LD C, $%02X", memory.readByte(address + 1) & 0xFF);
-                case 0x0F:
-                    return "RRCA";
-                case 0x10:
-                    return "STOP";
-                case 0x11:
-                    return String.format("LD DE, $%04X", read16(address + 1));
-                case 0x18:
-                    return String.format("JR $%02X", memory.readByte(address + 1) & 0xFF);
-                case 0x20:
-                    return String.format("JR NZ, $%02X", memory.readByte(address + 1) & 0xFF);
-                case 0xC3:
-                    return String.format("JP $%04X", read16(address + 1));
-                case 0xCD:
-                    return String.format("CALL $%04X", read16(address + 1));
-                case 0xC9:
-                    return "RET";
-                default:
-                    return String.format("??? ($%02X)", opcode);
+        public void scrollToAddress(int address) {
+            if (!isCartridgeLoaded()) {
+                return;
             }
+            SwingUtilities.invokeLater(() -> {
+                String target = String.format("%04X:", address & 0xFFFF);
+                String text = disassemblyArea.getText();
+                int index = text.indexOf(target);
+                if (index >= 0) {
+                    int lineStart = text.lastIndexOf('\n', index);
+                    lineStart = lineStart < 0 ? 0 : lineStart + 1;
+                    int lineEnd = text.indexOf('\n', index);
+                    lineEnd = lineEnd < 0 ? text.length() : lineEnd;
+                    disassemblyArea.setCaretPosition(lineStart);
+                    disassemblyArea.select(lineStart, lineEnd);
+                }
+            });
         }
 
-        private int read16(int address) {
-            int low = memory.readByte(address) & 0xFF;
-            int high = memory.readByte(address + 1) & 0xFF;
-            return (high << 8) | low;
-        }
     }
 
     // Register Panel
@@ -534,6 +794,8 @@ public class DebugView extends JFrame {
                 int address = Integer.parseInt(addressText, 16) & 0xFFFF;
                 breakpointTableModel.addBreakpoint(address);
                 addressField.setText("");
+                memoryViewer.refresh();
+                disassemblerPanel.refresh();
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(this, "Invalid address format", "Error", JOptionPane.ERROR_MESSAGE);
             }
@@ -543,11 +805,23 @@ public class DebugView extends JFrame {
             int selectedRow = breakpointTable.getSelectedRow();
             if (selectedRow >= 0) {
                 breakpointTableModel.removeBreakpoint(selectedRow);
+                memoryViewer.refresh();
+                disassemblerPanel.refresh();
             }
         }
 
         private void clearAllBreakpoints() {
             breakpointTableModel.clearAll();
+            memoryViewer.refresh();
+            disassemblerPanel.refresh();
+        }
+
+        public boolean hasBreakpoint(int address) {
+            return breakpointTableModel.contains(address);
+        }
+
+        public boolean hasBreakpointInRange(int start, int end) {
+            return breakpointTableModel.hasBreakpointInRange(start, end);
         }
     }
 
@@ -558,7 +832,8 @@ public class DebugView extends JFrame {
 
         public void addBreakpoint(int address) {
             if (!breakpoints.contains(address)) {
-                breakpoints.add(address);
+                breakpoints.add(address & 0xFFFF);
+                breakpoints.sort(Integer::compareUnsigned);
                 fireTableDataChanged();
             }
         }
@@ -603,6 +878,31 @@ public class DebugView extends JFrame {
         public Class<?> getColumnClass(int column) {
             return column == 1 ? Boolean.class : String.class;
         }
+
+        public boolean contains(int address) {
+            int normalized = address & 0xFFFF;
+            return breakpoints.contains(normalized);
+        }
+
+        public boolean hasBreakpointInRange(int start, int end) {
+            int normalizedStart = start & 0xFFFF;
+            int normalizedEnd = end & 0xFFFF;
+
+            for (int breakpoint : breakpoints) {
+                int value = breakpoint & 0xFFFF;
+                if (normalizedStart <= normalizedEnd) {
+                    if (value >= normalizedStart && value <= normalizedEnd) {
+                        return true;
+                    }
+                } else {
+                    if (value >= normalizedStart || value <= normalizedEnd) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
     }
 
     // Memory Search Panel
