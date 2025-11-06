@@ -2,7 +2,11 @@ package gbc.model.cpu;
 
 import gbc.model.memory.Memory;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class CPU {
+    private static final Logger LOGGER = Logger.getLogger(CPU.class.getName());
     private static final boolean DEBUG_LOG = Boolean.getBoolean("gbc.cpu.debug");
 
     private Registers registers;
@@ -126,8 +130,8 @@ public class CPU {
             int opcode = fetchByte();
 
             if (DEBUG_LOG && cycles % 1000 == 0) { // Every 1000 cycles
-                System.out.println(String.format("DEBUG: PC=0x%04X, Opcode=0x%02X, SP=0x%04X, Cycles=%d",
-                        (int) registers.getPC(), opcode, (int) registers.getSP(), cycles));
+                LOGGER.log(Level.FINE, () -> String.format("DEBUG: PC=0x%04X, Opcode=0x%02X, SP=0x%04X, Cycles=%d",
+                        registers.getPC() & 0xFFFF, opcode, registers.getSP() & 0xFFFF, cycles));
             }
 
             boolean cbPrefixed = opcode == 0xCB;
@@ -162,8 +166,8 @@ public class CPU {
             if (operation != null) {
                 operation.perform(registers, memory);
             } else {
-                System.err.println(String.format("ERROR: No %s operation found for opcode 0x%02X at PC=0x%04X",
-                        cbPrefixed ? "CB" : "", cbPrefixed ? cbOpcode : opcode, (int) registers.getPC()));
+                LOGGER.log(Level.SEVERE, () -> String.format("No %s operation found for opcode 0x%02X at PC=0x%04X",
+                        cbPrefixed ? "CB" : "", cbPrefixed ? cbOpcode : opcode, registers.getPC() & 0xFFFF));
             }
 
             int postCycles = baseCycles - preCycles;
@@ -206,7 +210,7 @@ public class CPU {
                             .append(ime ? 1 : 0)
                             .append(" HALT=")
                             .append(halted ? 1 : 0);
-                    System.out.println(sb.toString());
+                    LOGGER.log(Level.FINE, sb::toString);
                 }
             }
 

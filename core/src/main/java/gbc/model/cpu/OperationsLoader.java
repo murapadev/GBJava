@@ -5,6 +5,8 @@ import gbc.model.memory.Memory;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Loads operations, builds flat and grouped opcode maps, and supplies
@@ -18,6 +20,8 @@ import java.util.Map;
  * flow.
  */
 public class OperationsLoader {
+
+    private static final Logger LOGGER = Logger.getLogger(OperationsLoader.class.getName());
 
     private final Map<Integer, Operation> operations;
     private final Map<Integer, Operation> cbOperations;
@@ -173,7 +177,8 @@ public class OperationsLoader {
             return (regs, mem, ops) -> {
                 byte second = getImmediateByte(regs, mem);
                 if (second != 0x00) {
-                    System.err.printf("WARNING: STOP second byte unexpected: 0x%02X%n", second & 0xFF);
+                    int unexpected = second & 0xFF;
+                    LOGGER.log(Level.WARNING, () -> String.format("STOP second byte unexpected: 0x%02X", unexpected));
                 }
                 if (cpu != null && cpu.isPrepareSpeedSwitch()) {
                     cpu.setDoubleSpeedMode(!cpu.isDoubleSpeedMode());
@@ -203,8 +208,9 @@ public class OperationsLoader {
 
         if ("INVALID".equals(m)) {
             return (regs, mem, ops) -> {
-                System.err.printf("WARNING: Invalid opcode at PC=0x%04X op=0x%02X%n",
-                        (int) regs.getPC(), (int) mem.readByte(regs.getPC()) & 0xFF);
+                int pc = regs.getPC() & 0xFFFF;
+                int opcode = mem.readByte(pc) & 0xFF;
+                LOGGER.log(Level.WARNING, () -> String.format("Invalid opcode at PC=0x%04X op=0x%02X", pc, opcode));
                 // Advance 1 to avoid lock
                 regs.incrementPC();
             };
@@ -212,8 +218,8 @@ public class OperationsLoader {
 
         // Fallback for unimplemented mnemonics: consume bytes so execution can continue
         return (regs, mem, ops) -> {
-            System.err.printf("WARNING: Unimplemented operation %s at PC=0x%04X%n",
-                    op.getMnemonic(), (int) regs.getPC());
+            LOGGER.log(Level.WARNING, () -> String.format("Unimplemented operation %s at PC=0x%04X",
+                    op.getMnemonic(), regs.getPC() & 0xFFFF));
             int b = op.getBytes();
             if (b > 1) {
                 for (int i = 0; i < b - 1; i++)
@@ -345,8 +351,9 @@ public class OperationsLoader {
             return r.getRegister(name) & 0xFF;
         }
 
-        System.err.println("Unhandled operand in readMemoryOrRegister: " + name + " immediate=" + isImmediate
-                + " memory=" + isMemory);
+        LOGGER.log(Level.WARNING, () -> String.format(
+                "Unhandled operand in readMemoryOrRegister: %s immediate=%s memory=%s",
+                name, isImmediate, isMemory));
         return 0;
     }
 
@@ -371,7 +378,9 @@ public class OperationsLoader {
                 }
                 case "BC" -> m.writeByte(r.getBC(), (byte) value);
                 case "DE" -> m.writeByte(r.getDE(), (byte) value);
-                case "a16" -> System.err.println("Warning: a16 memory write should be handled by executor");
+                case "a16" -> {
+                    LOGGER.log(Level.WARNING, "a16 memory write should be handled by executor");
+                }
                 default -> {
                 }
             }
@@ -392,8 +401,9 @@ public class OperationsLoader {
                 && !"d8".equals(name) && !"d16".equals(name) && !"r8".equals(name)) {
             r.setRegister(name, (byte) value);
         } else {
-            System.err.println("Unhandled operand in writeMemoryOrRegister: " + name + " immediate=" + isImmediate
-                    + " memory=" + isMemory);
+            LOGGER.log(Level.WARNING, () -> String.format(
+                    "Unhandled operand in writeMemoryOrRegister: %s immediate=%s memory=%s",
+                    name, isImmediate, isMemory));
         }
     }
 
