@@ -273,12 +273,18 @@ public class OperationsLoader {
     /* ---------------- Immediate helpers ---------------- */
 
     private byte getImmediateByte(Registers r, Memory m) {
+        if (cpu != null) {
+            cpu.step(4);
+        }
         byte v = (byte) m.readByte(r.getPC());
         r.incrementPC();
         return v;
     }
 
     private char getImmediateChar(Registers r, Memory m) {
+        if (cpu != null) {
+            cpu.step(8);
+        }
         char v = (char) m.readChar(r.getPC());
         r.incrementPC();
         r.incrementPC();

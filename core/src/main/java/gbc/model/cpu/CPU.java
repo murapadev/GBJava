@@ -302,6 +302,11 @@ public class CPU {
         this.cycles = cycles;
     }
 
+    public void addCycles(int cycles) {
+        this.cycles += cycles;
+        memory.stepPeripherals(cycles);
+    }
+
     // CGB Dual-Speed Mode methods
     public boolean isDoubleSpeedMode() {
         return doubleSpeedMode;
@@ -393,6 +398,11 @@ public class CPU {
         if (!haltBugTriggered) {
             haltBugDeferredIncrement = false;
         }
+    }
+
+    public void step(int tCycles) {
+        memory.stepPeripherals(tCycles);
+        this.cycles += tCycles;
     }
 
     private void finalizeInstructionExecution() {
