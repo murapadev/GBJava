@@ -2,9 +2,12 @@ package gbc.model.graphics;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.JPanel;
 
 public class Screen extends JPanel {
+    private static final Logger LOGGER = Logger.getLogger(Screen.class.getName());
     private static final int WIDTH = 160; // Game Boy screen width
     private static final int HEIGHT = 144; // Game Boy screen height
 
@@ -17,7 +20,8 @@ public class Screen extends JPanel {
 
     public void render(int[] frameBuffer) {
         if (frameBuffer.length != WIDTH * HEIGHT) {
-            System.err.println("Invalid frame buffer size: " + frameBuffer.length + ", expected: " + (WIDTH * HEIGHT));
+            LOGGER.log(Level.WARNING, () -> String.format("Invalid frame buffer size: %d, expected: %d",
+                    frameBuffer.length, WIDTH * HEIGHT));
             return;
         }
         

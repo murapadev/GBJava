@@ -3,14 +3,18 @@ package gbc.model;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import gbc.model.cartridge.*;
 import gbc.core.input.Controller;
 import gbc.model.cpu.*;
 import gbc.model.memory.*;
 import gbc.model.graphics.*;
+import gbc.core.logging.LoggingConfig;
 
 public class GameBoyColor {
+	private static final Logger LOGGER = Logger.getLogger(GameBoyColor.class.getName());
 	private final CPU cpu;
 	private final Memory memory;
 	private PPU ppu;
@@ -23,6 +27,7 @@ public class GameBoyColor {
 	private float speedMultiplier = 1.0f;
 
 	public GameBoyColor() {
+		LoggingConfig.initialize();
 		this.memory = new Memory();
 		this.cpu = new CPU(this.memory);
 		this.screen = new Screen();
@@ -51,8 +56,9 @@ public class GameBoyColor {
 			data = Files.readAllBytes(Paths.get(path));
 			Cartridge cartridge = CartridgeFactory.create(data);
 			memory.loadCartridge(cartridge);
+			LOGGER.log(Level.INFO, () -> String.format("Loaded cartridge from %s", path));
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOGGER.log(Level.SEVERE, () -> "Failed to load cartridge from " + path, e);
 		}
 
 	}

@@ -12,12 +12,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Streams APU samples to the host audio device on a dedicated executor.
  * Falls back to a no-op mode when audio output is disabled or unavailable.
  */
 public final class AudioEngine implements AutoCloseable {
+    private static final Logger LOGGER = Logger.getLogger(AudioEngine.class.getName());
     private static final int SAMPLE_RATE = 44_100;
     private static final int BUFFER_SIZE = 4_096;
 
@@ -47,7 +50,7 @@ public final class AudioEngine implements AutoCloseable {
             line.open(format, BUFFER_SIZE);
             line.start();
         } catch (LineUnavailableException | IllegalArgumentException ex) {
-            System.err.println("AudioEngine disabled: " + ex.getMessage());
+            LOGGER.log(Level.WARNING, "AudioEngine disabled", ex);
             shutdownExecutor();
             line = null;
             return;
@@ -115,8 +118,7 @@ public final class AudioEngine implements AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
-            System.err.println("AudioEngine error: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "AudioEngine error", e);
         }
     }
 

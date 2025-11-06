@@ -2,10 +2,14 @@ package gbc.cli;
 
 import gbc.ui.controller.EmulatorController;
 import javax.swing.SwingUtilities;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class SimpleTest {
+
+    private static final Logger LOGGER = Logger.getLogger(SimpleTest.class.getName());
     public static void main(String[] args) {
-        System.out.println("=== Simple Emulator Test ===");
+        LOGGER.info("=== Simple Emulator Test ===");
 
         // Configurar Swing para debugging
         System.setProperty("awt.useSystemAAFontSettings", "on");
@@ -13,27 +17,26 @@ public class SimpleTest {
 
         SwingUtilities.invokeLater(() -> {
             try {
-                System.out.println("Creating controller...");
+                LOGGER.info("Creating controller...");
                 EmulatorController controller = new EmulatorController();
 
-                System.out.println("Starting emulator...");
+                LOGGER.info("Starting emulator...");
                 controller.start();
 
-                System.out.println("Emulator UI should be visible now");
+                LOGGER.info("Emulator UI should be visible now");
 
                 // Keep the program running
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                    System.out.println("Shutting down...");
+                    LOGGER.info("Shutting down...");
                     controller.stop();
                 }));
 
             } catch (Exception e) {
-                System.err.println("ERROR: " + e.getMessage());
-                e.printStackTrace();
+                LOGGER.log(Level.SEVERE, "Simple emulator test failed", e);
                 System.exit(1);
             }
         });
 
-        System.out.println("Main thread finished, UI should be running...");
+        LOGGER.info("Main thread finished, UI should be running...");
     }
 }

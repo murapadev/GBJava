@@ -6,7 +6,11 @@ import gbc.model.cpu.CPU; // Import CPU class
 import gbc.model.sound.Apu;
 import gbc.core.input.Controller;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class Memory {
+    private static final Logger LOGGER = Logger.getLogger(Memory.class.getName());
     // APU (Audio Processing Unit) register constants
     public static final int NR10 = 0xFF10; // Channel 1 sweep
     public static final int NR11 = 0xFF11; // Channel 1 length/duty
@@ -248,7 +252,7 @@ public class Memory {
                     .append(String.format("%04X", cpu.getRegisters().getPC() & 0xFFFF));
         }
 
-        System.out.println(sb.toString());
+        LOGGER.log(Level.FINE, sb::toString);
         timerTraceCount++;
     }
 
@@ -275,7 +279,7 @@ public class Memory {
                     .append(String.format("%04X", cpu.getRegisters().getPC() & 0xFFFF));
         }
 
-        System.out.println(sb.toString());
+        LOGGER.log(Level.FINER, sb::toString);
     }
 
     private void tracePostDivCycle(int oldDivider, int newDivider, boolean oldSignal, boolean newSignal) {
@@ -310,7 +314,7 @@ public class Memory {
                     .append(String.format("%04X", cpu.getRegisters().getPC() & 0xFFFF));
         }
 
-        System.out.println(sb.toString());
+        LOGGER.log(Level.FINEST, sb::toString);
 
         postDivTraceRemaining--;
         if (postDivTraceRemaining == 0) {

@@ -2,7 +2,12 @@ package gbc.model.graphics;
 
 import gbc.model.memory.Memory;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class PPU {
+    private static final Logger LOGGER = Logger.getLogger(PPU.class.getName());
+
     private Memory memory;
     private Screen screen;
     private int[] frameBuffer = new int[160 * 144]; // Frame buffer array
@@ -88,7 +93,7 @@ public class PPU {
                         try {
                             renderFrame();
                         } catch (Exception e) {
-                            System.err.println("PPU renderFrame() error: " + e.getMessage());
+                            LOGGER.log(Level.SEVERE, "PPU renderFrame() error", e);
                             updateLine();
                         }
                     } else {
@@ -330,8 +335,7 @@ public class PPU {
                 renderFrame();
             }
         } catch (Exception e) {
-            System.err.println("PPU rendering error: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "PPU rendering error", e);
             // Fallback to test pattern
             renderTestPattern();
         }
@@ -380,7 +384,7 @@ public class PPU {
         }
 
         screen.render(frameBuffer);
-        System.out.println("Rendered test pattern");
+        LOGGER.info("Rendered test pattern");
     }
 
     public Screen getScreen() {

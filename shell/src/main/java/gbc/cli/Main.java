@@ -3,8 +3,12 @@ package gbc.cli;
 import gbc.ui.controller.EmulatorController;
 
 import javax.swing.SwingUtilities;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Main {
+
+    private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
 
 	public static void main(String[] args) {
 		// Ensure GUI is created on EDT
@@ -23,18 +27,16 @@ public class Main {
 					String romPath = "samples/roms/Tetris.gb";
 					java.io.File romFile = new java.io.File(romPath);
 					if (romFile.exists()) {
-						System.out.println("Loading default ROM: " + romPath);
+						LOGGER.log(Level.INFO, () -> "Loading default ROM: " + romPath);
 						controller.loadRom(romPath);
 					} else {
-						System.out.println("Default ROM not found: " + romPath);
-						System.out.println(
-								"Running without ROM - showing test pattern");
+						LOGGER.log(Level.INFO, () -> "Default ROM not found: " + romPath);
+						LOGGER.info("Running without ROM - showing test pattern");
 					}
 				}
 
 			} catch (Exception e) {
-				System.err.println("Error starting emulator: " + e.getMessage());
-				e.printStackTrace();
+				LOGGER.log(Level.SEVERE, "Error starting emulator", e);
 				System.exit(1);
 			}
 		});

@@ -10,11 +10,15 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.image.BufferedImage;
 import java.io.Serial;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * EmulatorView with configurable scaling, filters, and display options
  */
 public class EmulatorView extends JPanel {
+
+    private static final Logger LOGGER = Logger.getLogger(EmulatorView.class.getName());
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -68,7 +72,7 @@ public class EmulatorView extends JPanel {
                 try {
                     ppu.updateGraphics();
                 } catch (Exception e) {
-                    System.err.println("Error in initial PPU update: " + e.getMessage());
+                    LOGGER.log(Level.SEVERE, "Error in initial PPU update", e);
                 }
             }
             repaint();
@@ -306,7 +310,7 @@ public class EmulatorView extends JPanel {
                 ppu.updateGraphics();
             }
         } catch (Exception e) {
-            System.err.println("Error updating PPU: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error updating PPU during view update", e);
         }
 
         // Simple repaint - no threading complexity

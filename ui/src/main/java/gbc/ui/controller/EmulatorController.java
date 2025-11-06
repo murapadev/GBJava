@@ -20,12 +20,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Coordinates the Swing UI and emulator core, handling threading concerns so
  * heavy operations (ROM loading, frame execution, metrics) never block the EDT.
  */
 public class EmulatorController {
+    private static final Logger LOGGER = Logger.getLogger(EmulatorController.class.getName());
     private static final int TARGET_FPS = 60;
     private static final long FRAME_TIME_NS = 1_000_000_000L / TARGET_FPS;
 
@@ -102,8 +105,7 @@ public class EmulatorController {
                 view.repaint();
                 view.onPauseStateChanged(false);
             } catch (Exception e) {
-                System.err.println("Error showing UI: " + e.getMessage());
-                e.printStackTrace();
+                LOGGER.log(Level.SEVERE, "Error showing UI", e);
             }
         });
 
@@ -114,7 +116,7 @@ public class EmulatorController {
         startMetricsTask();
         audioEngine.start(gbc);
         audioEngine.setPaused(false);
-        System.out.println("Emulator started");
+        LOGGER.info("Emulator started");
     }
 
     private void startMetricsTask() {
@@ -126,13 +128,13 @@ public class EmulatorController {
 
                 SwingUtilities.invokeLater(() -> view.updateFPS(paused.get() ? 0d : (double) rendered));
             } catch (Exception e) {
-                System.err.println("Failed to update FPS: " + e.getMessage());
+                LOGGER.log(Level.WARNING, "Failed to update FPS", e);
             }
         }, 1, 1, TimeUnit.SECONDS);
     }
 
     private void runEmulationLoop() {
-        System.out.println("Emulation loop started");
+        LOGGER.info("Emulation loop started");
 
         long lastTime = System.nanoTime();
         int framesSinceUiUpdate = 0;
@@ -165,7 +167,7 @@ public class EmulatorController {
                             try {
                                 view.update();
                             } catch (Exception e) {
-                                System.err.println("UI update error: " + e.getMessage());
+                                LOGGER.log(Level.WARNING, "UI update error", e);
                             }
                         });
                     }
@@ -185,12 +187,11 @@ public class EmulatorController {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                System.err.println("Emulation loop error: " + e.getMessage());
-                e.printStackTrace();
+                LOGGER.log(Level.SEVERE, "Emulation loop error", e);
             }
         }
 
-        System.out.println("Emulation loop ended");
+        LOGGER.info("Emulation loop ended");
     }
 
     private void executeFrame() {
@@ -207,33 +208,35 @@ public class EmulatorController {
                     cycleCount++;
 
                     if (cycleCount > 100000) {
-                        System.err.println("WARNING: Too many cycles in frame (" + cycleCount + ")");
-                        System.err.println("Executed cycles: " + executedCycles + ", Target: " + cyclesPerFrame);
-                        System.err.println(
-                                "Last PC: " + String.format("0x%04X", (int) gbc.getCpu().getRegisters().getPC()));
+                        int lastPc = gbc.getCpu().getRegisters().getPC() & 0xFFFF;
+                        LOGGER.log(Level.WARNING, () -> String.format(
+                                "Too many cycles in frame (%d). Executed=%d target=%d lastPC=0x%04X",
+                                cycleCount, executedCycles, cyclesPerFrame, lastPc));
                         break;
                     }
 
                     if (System.nanoTime() - startTime > 100_000_000) {
-                        System.err.println("WARNING: Frame execution timeout, possible infinite loop");
-                        System.err.println("Executed cycles: " + executedCycles + ", Instructions: " + cycleCount);
+                        LOGGER.log(Level.WARNING, () -> String.format(
+                                "Frame execution timeout (executed=%d instructions=%d)",
+                                executedCycles, cycleCount));
                         break;
                     }
                 } catch (Exception e) {
-                    System.err.println("Error during CPU execution: " + e.getMessage());
-                    e.printStackTrace();
+                    LOGGER.log(Level.SEVERE, "Error during CPU execution", e);
                     break;
                 }
             }
 
             if (Math.random() < 0.01) {
-                System.out.println("Executed " + cycleCount + " instructions, " + executedCycles + " cycles");
+                int executed = executedCycles;
+                int count = cycleCount;
+                LOGGER.log(Level.FINE, () -> String.format("Executed %d instructions, %d cycles", count, executed));
             }
         } else {
             try {
                 gbc.getPpu().updateGraphics();
             } catch (Exception e) {
-                System.err.println("Error updating PPU: " + e.getMessage());
+                LOGGER.log(Level.SEVERE, "Error updating PPU", e);
             }
         }
     }
@@ -310,7 +313,7 @@ public class EmulatorController {
         } else {
             future.whenComplete((unused, throwable) -> {
                 if (throwable != null) {
-                    System.err.println("Failed to load ROM: " + throwable.getMessage());
+                    LOGGER.log(Level.SEVERE, "Failed to load ROM", throwable);
                 }
             });
         }
@@ -337,13 +340,13 @@ public class EmulatorController {
             setPaused(false);
         }
 
-        System.out.println("Emulator reset");
+        LOGGER.info("Emulator reset");
     }
 
     public void togglePause() {
         boolean currentlyPaused = paused.get();
         setPaused(!currentlyPaused);
-        System.out.println(currentlyPaused ? "Emulator resumed" : "Emulator paused");
+        LOGGER.info(currentlyPaused ? "Emulator resumed" : "Emulator paused");
     }
 
     public void pause() {
@@ -410,7 +413,7 @@ public class EmulatorController {
         ioExecutor.shutdownNow();
         metricsExecutor.shutdownNow();
 
-        System.out.println("Emulator stopping...");
+        LOGGER.info("Emulator stopping...");
     }
 
     public GameBoyColor getGameBoyColor() {

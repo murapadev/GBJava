@@ -13,11 +13,15 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * EmulatorWindow with improved graphics, debugging, and UI features
  */
 public class EmulatorWindow extends JFrame implements KeyListener {
+
+    private static final Logger LOGGER = Logger.getLogger(EmulatorWindow.class.getName());
 
     private final GameBoyColor gbc;
     private EmulatorController controller;
@@ -61,7 +65,7 @@ public class EmulatorWindow extends JFrame implements KeyListener {
                 debugView = new DebugView(gbc);
                 debugView.setVisible(false);
             } catch (Exception e) {
-                System.out.println("Debug view not available: " + e.getMessage());
+                LOGGER.log(Level.INFO, "Debug view not available", e);
                 debugView = null;
             }
 
@@ -69,7 +73,7 @@ public class EmulatorWindow extends JFrame implements KeyListener {
                 vramViewer = new VRAMViewer(gbc);
                 vramViewer.setVisible(false);
             } catch (Exception e) {
-                System.out.println("VRAM viewer not available: " + e.getMessage());
+                LOGGER.log(Level.INFO, "VRAM viewer not available", e);
                 vramViewer = null;
             }
 
@@ -77,13 +81,12 @@ public class EmulatorWindow extends JFrame implements KeyListener {
             try {
                 menuBar = new MenuBar(this, gbc, emulatorView);
             } catch (Exception e) {
-                System.out.println("Custom menu bar not available: " + e.getMessage());
+                LOGGER.log(Level.INFO, "Custom menu bar not available", e);
                 menuBar = null;
             }
 
         } catch (Exception e) {
-            System.err.println("Error initializing components: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error initializing components", e);
 
             // Fallback: create minimal components
             emulatorView = new EmulatorView(gbc);
@@ -228,7 +231,7 @@ public class EmulatorWindow extends JFrame implements KeyListener {
             updateStatus();
 
         } catch (Exception e) {
-            System.err.println("Error updating UI: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error updating UI", e);
         }
     }
 
