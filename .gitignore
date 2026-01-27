@@ -1,9 +1,94 @@
+# =========================
+# Build & Compilation
+# =========================
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# =========================
+# IDE - IntelliJ IDEA
+# =========================
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# =========================
+# IDE - Eclipse
+# =========================
+.classpath
+.project
+.settings/
+bin/
+
+# =========================
+# IDE - VS Code
+# =========================
+.vscode/
+
+# =========================
+# Build Tools
+# =========================
+.gradle/
+.mvn/
+!.mvn/wrapper/maven-wrapper.jar
+gradle/
+build/
+
+# =========================
+# OS Generated
+# =========================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# =========================
+# Python (venv)
+# =========================
+.venv/
+__pycache__/
+*.py[cod]
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+!logs/.gitkeep
+
+# =========================
+# Game Boy ROMs & Saves
+# =========================
 *.gb
 *.gbc
-.idea/
-.gradle/
-target/
-*.log
 *.sav
+*.srm
+*.rtc
 
-.venv/
+# =========================
+# Emulator State
+# =========================
+*.state
+*.savestate
+
+# =========================
+# Temporary Files
+# =========================
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# =========================
+# Test Output
+# =========================
+test_output.txt
+test-output/
+surefire-reports/
