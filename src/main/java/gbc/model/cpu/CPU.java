@@ -4,8 +4,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import gbc.model.memory.Memory;
+import gbc.model.trace.TraceGenerator;
 
 public class CPU {
+    // TODO: Audit STOP/HALT/IME timing and CGB speed-switch side effects for cycle
+    // accuracy.
     private static final Logger LOGGER = Logger.getLogger(CPU.class.getName());
     private static final boolean DEBUG_LOG = Boolean.getBoolean("gbc.cpu.debug");
 
@@ -21,6 +24,7 @@ public class CPU {
     private long traceCount = 0;
 
     private int cycles;
+    private int peripheralCycleRemainder;
     private StringBuilder opcodeLog;
 
     // CGB Dual-Speed Mode
@@ -38,6 +42,23 @@ public class CPU {
     // HALT state
     private boolean halted = false;
     private boolean haltBugTriggered = false;
+
+    // M-cycle interleaving: tracks cycles consumed by memory access callbacks
+    private int mcycleCallbackCycles;
+    private int currentInstructionCycles; // total cycles executed for the current instruction
+    private TraceGenerator trace;
+    private boolean invalidTraceDumped;
+
+    // Cached operation cycles to avoid re-lookup in updateCycles
+    private Operation cachedOperation;
+
+    // Reusable M-cycle callback to avoid lambda allocation per instruction
+    private final Runnable mcycleCallback = () -> {
+        stepPeripheralsForCpuCycles(4);
+        cycles += 4;
+        currentInstructionCycles += 4;
+        mcycleCallbackCycles += 4;
+    };
 
     public CPU(Memory memory) {
         this.memory = memory;
@@ -70,7 +91,7 @@ public class CPU {
             sb.append(String.format("%04X: ", addr));
             int lineEnd = Math.min(e, addr + 15);
             for (int a = addr; a <= lineEnd; a++) {
-                sb.append(String.format("%02X ", memory.readByte(a)));
+                sb.append(String.format("%02X ", memory.peekByte(a)));
             }
             sb.append('\n');
         }
@@ -84,7 +105,7 @@ public class CPU {
         int toRead = Math.max(0, bytes);
         for (int off = 0; off < toRead; off += 2) {
             int addr = ((sp & 0xFFFF) + off) & 0xFFFF;
-            sb.append(String.format("%04X: %04X\n", addr, memory.readChar(addr)));
+            sb.append(String.format("%04X: %04X\n", addr, memory.peekChar(addr)));
         }
         return sb.toString();
     }
@@ -100,6 +121,7 @@ public class CPU {
         memory.reset();
         interruptions.reset();
         cycles = 0;
+        peripheralCycleRemainder = 0;
 
         // Reset CGB dual-speed state
         doubleSpeedMode = false;
@@ -122,11 +144,11 @@ public class CPU {
 
         int interruptCycles = handleInterrupts();
         if (interruptCycles > 0) {
-            memory.stepPeripherals(interruptCycles);
+            stepPeripheralsForCpuCycles(interruptCycles);
             cycles += interruptCycles;
             return interruptCycles;
         }
-        int cyclesExecuted = 0;
+        currentInstructionCycles = 0;
         boolean executedInstruction = false;
 
         if (!halted) {
@@ -156,16 +178,29 @@ public class CPU {
                 baseCycles = cbPrefixed ? 8 : 4;
             }
 
-            cyclesExecuted = 0;
+            int fetchCycles = cbPrefixed ? 8 : 4;
 
-            int preCycles = Math.max(0, baseCycles - 4);
-            if (preCycles > 0) {
-                memory.stepPeripherals(preCycles);
-                cycles += preCycles;
-                cyclesExecuted += preCycles;
+            // M-cycle granular stepping: step peripherals for opcode fetch M-cycle
+            stepPeripheralsForCpuCycles(4);
+            cycles += 4;
+            currentInstructionCycles += 4;
+
+            // For CB-prefixed: the CB opcode fetch is another M-cycle
+            if (cbPrefixed) {
+                stepPeripheralsForCpuCycles(4);
+                cycles += 4;
+                currentInstructionCycles += 4;
             }
 
             setLastConditionTaken(false);
+
+            // Enable M-cycle interleaving: each memory access during the operation
+            // will step peripherals for 4 T-cycles via the mcycleCallback
+            mcycleCallbackCycles = 0;
+            memory.setMcycleCallback(mcycleCallback);
+
+            // Cache operation for cycle lookup
+            cachedOperation = operation;
 
             if (operation != null) {
                 operation.perform(registers, memory);
@@ -175,19 +210,19 @@ public class CPU {
                         cbPrefixed ? "CB" : "", cbPrefixed ? finalCbOpcode : opcode, registers.getPC() & 0xFFFF));
             }
 
-            int postCycles = baseCycles - preCycles;
-            if (postCycles > 0) {
-                memory.stepPeripherals(postCycles);
-                cycles += postCycles;
-                cyclesExecuted += postCycles;
-            }
+            // Disable M-cycle callback
+            memory.setMcycleCallback(null);
 
+            // Determine total cycles (accounting for conditional branches)
             int totalCycles = cbPrefixed ? updateCyclesCB(cbOpcode) : updateCycles(opcode);
-            int extraCycles = Math.max(0, totalCycles - baseCycles);
-            if (extraCycles > 0) {
-                memory.stepPeripherals(extraCycles);
-                cycles += extraCycles;
-                cyclesExecuted += extraCycles;
+
+            // Step remaining "internal" M-cycles not covered by fetch or memory accesses
+            int remainingCycles = Math.max(0, totalCycles - fetchCycles - mcycleCallbackCycles);
+            for (int m = 0; m < remainingCycles; m += 4) {
+                int chunk = Math.min(4, remainingCycles - m);
+                stepPeripheralsForCpuCycles(chunk);
+                cycles += chunk;
+                currentInstructionCycles += chunk;
             }
 
             if (TRACE_ENABLED && traceCount < TRACE_LIMIT) {
@@ -207,10 +242,10 @@ public class CPU {
                     }
                     sb.append(" base=")
                             .append(baseCycles)
-                            .append(" extra=")
-                            .append(extraCycles)
+                            .append(" memAccess=")
+                            .append(mcycleCallbackCycles)
                             .append(" total=")
-                            .append(baseCycles + extraCycles)
+                            .append(totalCycles)
                             .append(" IME=")
                             .append(ime ? 1 : 0)
                             .append(" HALT=")
@@ -221,16 +256,37 @@ public class CPU {
 
             executedInstruction = true;
         } else {
-            cyclesExecuted = 4; // HALT consumes 4 cycles
-            memory.stepPeripherals(cyclesExecuted);
-            cycles += cyclesExecuted;
+            currentInstructionCycles = 4; // HALT consumes 4 cycles
+            stepPeripheralsForCpuCycles(currentInstructionCycles);
+            cycles += currentInstructionCycles;
         }
 
         if (executedInstruction) {
             finalizeInstructionExecution();
         }
 
-        return cyclesExecuted;
+        return currentInstructionCycles;
+    }
+
+    private void stepPeripheralsForCpuCycles(int cpuCycles) {
+        if (cpuCycles <= 0) {
+            return;
+        }
+        int stepCycles = cpuCycles;
+        if (doubleSpeedMode) {
+            peripheralCycleRemainder += cpuCycles;
+            stepCycles = peripheralCycleRemainder / 2;
+            peripheralCycleRemainder %= 2;
+        }
+        if (stepCycles > 0) {
+            memory.stepPeripherals(stepCycles);
+        }
+        if (doubleSpeedMode) {
+            int fastCycles = cpuCycles - stepCycles;
+            if (fastCycles > 0) {
+                memory.stepFastPeripherals(fastCycles);
+            }
+        }
     }
 
     private boolean isCartridgeLoaded() {
@@ -240,6 +296,20 @@ public class CPU {
 
     private int handleInterrupts() {
         boolean pendingInterrupt = interruptions.hasPendingInterrupt();
+        boolean dmaBlocksStack = memory.isDmaActive() && memory.isOamDmaBusLocked(registers.getSP());
+
+        if (dmaBlocksStack) {
+            // OAM DMA blocks stack access; defer interrupt dispatch until DMA completes.
+            if (halted && pendingInterrupt) {
+                halted = false;
+            }
+            // If we are mid-dispatch, stall in place (consume a dispatch M-cycle) until DMA
+            // ends.
+            if (interruptDispatchState != 0) {
+                return 4;
+            }
+            return 0;
+        }
 
         // Interrupt Dispatch State Machine
         if (interruptDispatchState == 0) {
@@ -299,11 +369,12 @@ public class CPU {
 
     private boolean debugTraceEnabled = false;
     private Integer latchedInterruptVector = null;
+
     private int updateCycles(int opcode) {
         if (debugTraceEnabled) {
             String msg = String.format("[TRACE] PC=%04X Op=%02X SP=%04X IE=%02X IF=%02X",
                     registers.getPC(), opcode, registers.getSP(),
-                    memory.readByte(0xFFFF), memory.readByte(0xFF0F));
+                    memory.peekByte(0xFFFF), memory.peekByte(0xFF0F));
             LOGGER.fine(msg);
             // Limit trace to avoid massive log files
             if (registers.getPC() == 0x211) {
@@ -311,24 +382,24 @@ public class CPU {
             }
         }
         if (opcode == 0xCB) {
-            int cbOpcode = memory.readByte(registers.getPC() - 1); // Reread CB opcode
+            int cbOpcode = memory.peekByte(registers.getPC() - 1); // Reread CB opcode without side effects
             return updateCyclesCB(cbOpcode);
         }
-        Operation operation = operationsLoader.getOperation(opcode);
-        if (operation != null) {
+        // Use cached operation to avoid re-lookup
+        if (cachedOperation != null) {
             // If multiple cycle variants exist (conditional), select based on branch taken
-            if (operation.getCycles().size() > 1) {
-                return lastConditionTaken ? operation.getCycles().get(1) : operation.getCycles().get(0);
+            if (cachedOperation.getCycles().size() > 1) {
+                return lastConditionTaken ? cachedOperation.getCycles().get(1) : cachedOperation.getCycles().get(0);
             }
-            return operation.getCycles().get(0);
+            return cachedOperation.getCycles().get(0);
         }
         return 4; // Default cycle count for unknown operations
     }
 
     private int updateCyclesCB(int cbOpcode) {
-        Operation operation = operationsLoader.getCbOperation(cbOpcode);
-        if (operation != null) {
-            return operation.getCycles().get(0); // assuming the first cycle count is the base cycle count
+        // Use cached operation to avoid re-lookup
+        if (cachedOperation != null) {
+            return cachedOperation.getCycles().get(0);
         }
         return 8; // Default cycle count for unknown CB operations
     }
@@ -338,14 +409,14 @@ public class CPU {
             LOGGER.fine("[CPU] Fetching from PC=" + String.format("%04X", registers.getPC()));
         }
         int value = memory.readByte(registers.getPC());
-        
+
         if (haltBugTriggered) {
-             // Halt bug: PC is not incremented for this fetch
-             haltBugTriggered = false;
+            // Halt bug: PC is not incremented for this fetch
+            haltBugTriggered = false;
         } else {
-             registers.incrementPC();
+            registers.incrementPC();
         }
-        
+
         return value & 0xFF;
     }
 
@@ -359,7 +430,20 @@ public class CPU {
 
     public void addCycles(int cycles) {
         this.cycles += cycles;
-        memory.stepPeripherals(cycles);
+        stepPeripheralsForCpuCycles(cycles);
+    }
+
+    /**
+     * Tick one internal M-cycle (4 T-cycles) during instruction execution.
+     * Used by operations that have internal cycles between memory accesses
+     * (e.g., CALL has an internal cycle between reading the target address
+     * and pushing the return address to the stack).
+     */
+    public void tickInternalMcycle() {
+        stepPeripheralsForCpuCycles(4);
+        cycles += 4;
+        currentInstructionCycles += 4;
+        mcycleCallbackCycles += 4; // Count toward total so remaining calculation is correct
     }
 
     // CGB Dual-Speed Mode methods
@@ -369,6 +453,7 @@ public class CPU {
 
     public void setDoubleSpeedMode(boolean doubleSpeedMode) {
         this.doubleSpeedMode = doubleSpeedMode;
+        peripheralCycleRemainder = 0;
     }
 
     public boolean isPrepareSpeedSwitch() {
@@ -381,7 +466,8 @@ public class CPU {
 
     // KEY1 register (0xFF4D) - Speed control
     public int readKey1() {
-        int key1 = 0;
+        // Bits 6-1 read back as 1 on CGB hardware.
+        int key1 = 0x7E;
         if (doubleSpeedMode)
             key1 |= 0x80; // Current speed mode (1 = double speed)
         if (prepareSpeedSwitch)
@@ -400,6 +486,21 @@ public class CPU {
 
     public Registers getRegisters() {
         return registers;
+    }
+
+    public void setTrace(TraceGenerator trace) {
+        this.trace = trace;
+        this.invalidTraceDumped = false;
+    }
+
+    public void onInvalidOpcode(int pc, int opcode) {
+        if (trace != null && !invalidTraceDumped && Boolean.getBoolean("gbc.trace.ringbuffer")) {
+            trace.dumpRingBuffer();
+            invalidTraceDumped = true;
+            LOGGER.log(Level.WARNING, () -> String.format(
+                    "Trace ring buffer dumped on invalid opcode at PC=0x%04X (op=0x%02X)",
+                    pc & 0xFFFF, opcode & 0xFF));
+        }
     }
 
     public Interruptions getInterruptions() {
@@ -459,7 +560,7 @@ public class CPU {
     }
 
     public void step(int tCycles) {
-        memory.stepPeripherals(tCycles);
+        stepPeripheralsForCpuCycles(tCycles);
         this.cycles += tCycles;
     }
 

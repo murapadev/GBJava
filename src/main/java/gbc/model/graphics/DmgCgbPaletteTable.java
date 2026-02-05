@@ -18,6 +18,7 @@ import java.util.logging.Logger;
  * This emulates the CGB boot ROM palette selection when no boot ROM is present.
  */
 public final class DmgCgbPaletteTable {
+    // TODO: Expand palette selection (title+licensee/checksum rules) and validate external tables.
     public record DmgCgbPalette(int[] bg, int[] obj0, int[] obj1) {
         public int[] bg() { return bg; }
         public int[] obj0() { return obj0; }

@@ -1,13 +1,18 @@
 package gbc.model.cartridge;
 
 public class ROM extends Cartridge {
+	// Keep optional ROM write emulation only for dedicated tests that explicitly need it.
+	private final boolean allowRomWrites;
 	private byte[] writeBuffer; // For testing purposes
 	private boolean[] written; // Track which addresses have been written
 
 	public ROM(byte[] data) {
 		super(data);
-		this.writeBuffer = new byte[data.length];
-		this.written = new boolean[data.length];
+		this.allowRomWrites = Boolean.getBoolean("gbc.rom.allowWrites");
+		if (allowRomWrites) {
+			this.writeBuffer = new byte[data.length];
+			this.written = new boolean[data.length];
+		}
 		// Allocate RAM if header indicates RAM
 		int ramSize = getRamSize(data[0x0149]);
 		if (ramSize > 0) {
@@ -37,8 +42,8 @@ public class ROM extends Cartridge {
 			}
 			return 0;
 		}
-		// Check if we have written data for this address
-		if (written != null && address >= 0 && address < written.length && written[address]) {
+		// Optional write-buffer for dedicated tests.
+		if (allowRomWrites && written != null && address >= 0 && address < written.length && written[address]) {
 			return writeBuffer[address];
 		}
 		// Otherwise read from original ROM data
@@ -57,8 +62,9 @@ public class ROM extends Cartridge {
 			}
 			return;
 		}
-		// Store writes in buffer for testing purposes
-		if (writeBuffer != null && address >= 0 && address < writeBuffer.length) {
+		// Real hardware ignores ROM writes (except mapper control on MBC carts).
+		// For plain ROM carts, writes are ignored unless a test enables write buffering.
+		if (allowRomWrites && writeBuffer != null && address >= 0 && address < writeBuffer.length) {
 			writeBuffer[address] = value;
 			if (written != null && address < written.length) {
 				written[address] = true;

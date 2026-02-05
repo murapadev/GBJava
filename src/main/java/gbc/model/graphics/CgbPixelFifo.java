@@ -15,11 +15,11 @@ public class CgbPixelFifo implements PixelFifo {
     private final IntQueue objBehindBg = new IntQueue(16);
     private final IntQueue objPriority = new IntQueue(16);
     private final Memory memory;
-    private final Screen screen;
+    private final FrameBuffer frameBuffer;
     private int x;
 
-    public CgbPixelFifo(Screen screen, Memory memory) {
-        this.screen = screen;
+    public CgbPixelFifo(FrameBuffer frameBuffer, Memory memory) {
+        this.frameBuffer = frameBuffer;
         this.memory = memory;
         this.x = 0;
     }
@@ -42,22 +42,18 @@ public class CgbPixelFifo implements PixelFifo {
         int y = memory.getLy();
         if (x < 160 && y < 144) {
             int color = resolveColor(bgPixel, bgPalette, bgPrio, objPixel, objPalette, objBehind);
-            screen.setPixel(x, y, color);
+            frameBuffer.setPixel(x, y, color);
         }
         x++;
     }
 
     private int resolveColor(int bgPixel, int bgPalette, int bgPrio, int objPixel, int objPalette, int objBehind) {
-        boolean bgEnabled = (memory.getLcdc() & 0x01) != 0;
-        if (!bgEnabled) {
-            if (objPixel == 0) {
-                return getCgbBgColor(0, 0);
-            }
-            return getCgbObjColor(objPalette, objPixel);
-        }
-
+        boolean masterPriority = (memory.getLcdc() & 0x01) != 0;
         if (objPixel == 0) {
             return getCgbBgColor(bgPalette, bgPixel);
+        }
+        if (!masterPriority) {
+            return getCgbObjColor(objPalette, objPixel);
         }
         if (bgPixel == 0) {
             return getCgbObjColor(objPalette, objPixel);
@@ -68,6 +64,7 @@ public class CgbPixelFifo implements PixelFifo {
         if (objBehind != 0) {
             return getCgbBgColor(bgPalette, bgPixel);
         }
+        // TODO: Verify CGB priority rules (BG priority bit vs OBJ priority) against hardware tests.
         return getCgbObjColor(objPalette, objPixel);
     }
 
@@ -90,9 +87,9 @@ public class CgbPixelFifo implements PixelFifo {
         int r = value & 0x1F;
         int g = (value >> 5) & 0x1F;
         int b = (value >> 10) & 0x1F;
-        int rr = (r * 255) / 31;
-        int gg = (g * 255) / 31;
-        int bb = (b * 255) / 31;
+        int rr = (r << 3) | (r >> 2);
+        int gg = (g << 3) | (g >> 2);
+        int bb = (b << 3) | (b >> 2);
         return 0xFF000000 | (rr << 16) | (gg << 8) | bb;
     }
 
@@ -129,34 +126,39 @@ public class CgbPixelFifo implements PixelFifo {
     @Override
     public void setOverlay(int[] pixelLine, int offset, TileAttributes spriteAttributes, int oamIndex) {
         boolean priority = spriteAttributes != null && spriteAttributes.isPriority();
+        boolean xflip = spriteAttributes != null && spriteAttributes.isXflip();
         int palette = spriteAttributes != null ? spriteAttributes.getPalette() : 0;
         int priorityKey = oamIndex & 0xFF; // CGB OBJ priority: lower OAM index wins
 
         int fifoSize = bgPixels.size();
-        for (int j = Math.max(0, offset); j < pixelLine.length; j++) {
-            int p = pixelLine[j];
-            int i = j - offset;
-            if (i < 0 || i >= fifoSize) {
-                break;
+        for (int screenIndex = 0; screenIndex < 8; screenIndex++) {
+            int fifoIndex = screenIndex - offset;
+            if (fifoIndex < 0 || fifoIndex >= fifoSize) {
+                continue;
             }
+            int srcIndex = xflip ? (7 - screenIndex) : screenIndex;
+            if (srcIndex < 0 || srcIndex >= pixelLine.length) {
+                continue;
+            }
+            int p = pixelLine[srcIndex];
             if (p == 0) {
                 continue;
             }
-            if (objPixels.get(i) != 0) {
-                int existingPriority = objPriority.get(i);
+            if (objPixels.get(fifoIndex) != 0) {
+                int existingPriority = objPriority.get(fifoIndex);
                 if (priorityKey >= existingPriority) {
                     continue;
                 }
-                objPixels.set(i, p);
-                objPalettes.set(i, palette);
-                objBehindBg.set(i, priority ? 1 : 0);
-                objPriority.set(i, priorityKey);
+                objPixels.set(fifoIndex, p);
+                objPalettes.set(fifoIndex, palette);
+                objBehindBg.set(fifoIndex, priority ? 1 : 0);
+                objPriority.set(fifoIndex, priorityKey);
                 continue;
             }
-            objPixels.set(i, p);
-            objPalettes.set(i, palette);
-            objBehindBg.set(i, priority ? 1 : 0);
-            objPriority.set(i, priorityKey);
+            objPixels.set(fifoIndex, p);
+            objPalettes.set(fifoIndex, palette);
+            objBehindBg.set(fifoIndex, priority ? 1 : 0);
+            objPriority.set(fifoIndex, priorityKey);
         }
     }
 

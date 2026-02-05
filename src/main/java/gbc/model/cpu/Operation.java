@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 public class Operation {
+    // TODO: Enforce non-null executor/operand metadata for all defined opcodes.
     private OperationExecutor executor;
     private String mnemonic;
     private int bytes;

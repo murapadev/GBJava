@@ -12,6 +12,7 @@ import java.util.Map;
  * unprefixed and CB-prefixed spaces.
  */
 final class OperationDefinitions {
+        // TODO: Validate opcode tables/cycle counts against authoritative sources.
 
         private OperationDefinitions() {
         }

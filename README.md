@@ -4,16 +4,14 @@ A WIP GB emulator made from scratch in Java.
 
 ## Project layout
 
-The repository is an aggregated Maven build split across three main modules.
-See `docs/PROJECT_STRUCTURE.md` for a full, sorted directory tree and
-descriptions of the supporting assets.
+Single-module Maven project with source and tests under `src/`.
 
-- `core/` – Emulator CPU, PPU, APU, MMU and runtime utilities (`gbc.core.*`).
-- `shell/` – Command-line entry points and manual harnesses (`gbc.cli.*`).
-- `ui/` – Swing-based user interface widgets and controllers (`gbc.ui.*`).
-- `mooneye-test-suite/` – Upstream compatibility ROMs used for validation.
-- `samples/` – Local ROMs (`roms/`) and save files (`saves/`) used manually.
-- `logs/` – Runtime logging artifacts (gitignored, safe to purge).
+- `src/main/java/gbc/` – Emulator core, UI, and CLI entry point.
+- `src/main/resources/` – Runtime resources (palette data, etc.).
+- `src/test/java/gbc/` – Unit and acceptance tests.
+- `samples/` – Local ROMs used for manual testing.
+- `saves/` – Save files used manually.
+- `logs/` – Runtime logging artifacts (safe to purge).
 
 ## Desktop UI
 
@@ -29,3 +27,23 @@ debugging:
   state, active speed multiplier, and instantaneous FPS.
 - Integrated shortcuts to the advanced debug and VRAM viewers, which now stay in
   lockstep with the main emulator controller.
+
+## Debugging (JDWP)
+
+Run the emulator with the debug profile so a debugger can attach:
+
+```bash
+mvn -Pdebug -DskipTests compile exec:exec
+```
+
+Optional flags:
+
+```bash
+# Change the debug port (default 5005)
+mvn -Pdebug -Ddebug.port=5006 -DskipTests compile exec:exec
+
+# Wait for the debugger to attach before starting
+mvn -Pdebug -Ddebug.suspend=y -DskipTests compile exec:exec
+```
+
+Attach your debugger to `localhost:5005` (or the port you chose).

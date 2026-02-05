@@ -1,6 +1,7 @@
 package gbc.model.cpu;
 
 public class Registers {
+	// TODO: Include CGB-in-DMG initial registers and header/boot-variant differences.
 	private byte A, B, C, D, E, F, H, L;
 	private int PC, SP;
 
@@ -41,7 +42,7 @@ public class Registers {
 	}
 
 	public void setPC(int value) {
-		PC = value;
+		PC = value & 0xFFFF; // Ensure PC stays within 16-bit address space
 	}
 
 	public int getSP() {
@@ -49,7 +50,7 @@ public class Registers {
 	}
 
 	public void setSP(int value) {
-		SP = value;
+		SP = value & 0xFFFF; // Ensure SP stays within 16-bit address space
 	}
 
 	public int getAF() {
@@ -99,77 +100,22 @@ public class Registers {
 	 * Values from https://gbdev.io/pandocs/Power_Up_Sequence.html
 	 */
 	public void reset(gbc.model.HardwareType hardwareType) {
-		// Common values for all hardware
-		D = 0x00;
-		SP = 0xfffe;
-		PC = 0x0100;
-		
-		switch (hardwareType) {
-			case DMG -> {
-				// DMG-ABC (most common)
-				A = 0x01;
-				F = (byte) 0xB0; // Z=1, N=0, H=1, C=1
-				B = 0x00;
-				C = 0x13;
-				E = (byte) 0xD8;
-				H = 0x01;
-				L = 0x4D;
-			}
-			case DMG0 -> {
-				// DMG-0 (early revision)
-				A = 0x01;
-				F = (byte) 0x00; // Z=0, N=0, H=0, C=0 
-				B = (byte) 0xFF;
-				C = 0x13;
-				E = (byte) 0xC1;
-				H = (byte) 0x84;
-				L = 0x03;
-			}
-			case MGB -> {
-				// Game Boy Pocket - same as DMG except A
-				A = (byte) 0xFF;
-				F = (byte) 0xB0; // Z=1, N=0, H=1, C=1
-				B = 0x00;
-				C = 0x13;
-				E = (byte) 0xD8;
-				H = 0x01;
-				L = 0x4D;
-			}
-			case SGB -> {
-				// Super Game Boy
-				A = 0x01;
-				F = (byte) 0x00; // Z=0, N=0, H=0, C=0
-				B = 0x00;
-				C = 0x14;
-				E = 0x00;
-				H = (byte) 0xC0;
-				L = 0x60;
-			}
-			case SGB2 -> {
-				// Super Game Boy 2
-				A = (byte) 0xFF;
-				F = (byte) 0x00; // Z=0, N=0, H=0, C=0
-				B = 0x00;
-				C = 0x14;
-				E = 0x00;
-				H = (byte) 0xC0;
-				L = 0x60;
-			}
-			case CGB -> {
-				// Game Boy Color
-				A = 0x11;
-				F = (byte) 0x80; // Z=1, N=0, H=0, C=0
-				B = 0x00;
-				C = 0x00;
-				E = 0x08;
-				H = 0x00;
-				L = 0x7C;
-			}
-		}
+		gbc.model.HardwareType hw = hardwareType == null ? gbc.model.HardwareType.DMG : hardwareType;
+		gbc.model.HardwareType.CpuInitState state = hw.getCpuInitState();
+		A = (byte) state.a();
+		F = (byte) (state.f() & 0xF0);
+		B = (byte) state.b();
+		C = (byte) state.c();
+		D = (byte) state.d();
+		E = (byte) state.e();
+		H = (byte) state.h();
+		L = (byte) state.l();
+		SP = state.sp() & 0xFFFF;
+		PC = state.pc() & 0xFFFF;
 	}
 
 	public void incrementPC() {
-		PC++;
+		PC = (PC + 1) & 0xFFFF; // Wrap to 16-bit address space
 	}
 
 	// Flag convenience methods for cleaner code

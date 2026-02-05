@@ -34,14 +34,14 @@ public final class Disassembler {
     public static DecodedInstruction decode(Memory memory, int address) {
         Objects.requireNonNull(memory, "memory");
         int pc = address & 0xFFFF;
-        int opcode = memory.readByte(pc) & 0xFF;
+        int opcode = memory.peekByte(pc) & 0xFF;
 
         boolean cbPrefixed = opcode == 0xCB;
         Operation operation;
         int instructionBytes;
         if (cbPrefixed) {
             int nextAddr = (pc + 1) & 0xFFFF;
-            int cbOpcode = memory.readByte(nextAddr) & 0xFF;
+            int cbOpcode = memory.peekByte(nextAddr) & 0xFF;
             operation = CB_PREFIXED.get(cbOpcode);
             instructionBytes = operation != null ? Math.max(2, operation.getBytes()) : 2;
             if (operation == null) {
@@ -86,7 +86,7 @@ public final class Disassembler {
         List<Integer> bytes = new ArrayList<>(length);
         for (int i = 0; i < length; i++) {
             int addr = (start + i) & 0xFFFF;
-            bytes.add(memory.readByte(addr) & 0xFF);
+            bytes.add(memory.peekByte(addr) & 0xFF);
         }
         return bytes;
     }
@@ -101,7 +101,7 @@ public final class Disassembler {
             // Special case: STOP has a padding byte that is usually zero. We omit it from
             // text.
             if ("STOP".equals(operation.getMnemonic()) && instructionBytes > 1) {
-                int padding = memory.readByte((address + 1) & 0xFFFF) & 0xFF;
+                int padding = readByte(memory, address, 1);
                 if (padding != 0) {
                     return String.format("$%02X", padding);
                 }
@@ -209,7 +209,7 @@ public final class Disassembler {
 
     private static int readByte(Memory memory, int base, int offset) {
         int address = (base + offset) & 0xFFFF;
-        return memory.readByte(address) & 0xFF;
+        return memory.peekByte(address) & 0xFF;
     }
 
     private static int readWord(Memory memory, int base, int offset) {

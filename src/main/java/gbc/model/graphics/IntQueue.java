@@ -4,6 +4,7 @@ package gbc.model.graphics;
  * Simple integer queue implementation for pixel FIFO.
  */
 public class IntQueue {
+    // TODO: Consider a non-throwing dequeue for PPU hot paths to reduce exception overhead.
     private final int[] data;
     private int head;
     private int tail;

@@ -5,10 +5,13 @@ package gbc.model.sound;
  * Handles volume ramping up/down over time
  */
 public class VolumeEnvelope {
+    // TODO: Match envelope timing when period=0 and trigger behavior across
+    // channels.
     private int period;
     private int periodTimer;
     private int volume;
     private boolean upwards;
+    private int registerValue;
     private final int registerAddress;
 
     public VolumeEnvelope(int registerAddress) {
@@ -40,13 +43,21 @@ public class VolumeEnvelope {
         samples[1] *= factor;
     }
 
+    /** Get current volume as a float factor [0.0, 1.0] */
+    public float getVolume() {
+        return (float) volume / 15f;
+    }
+
     public void triggerEvent() {
-        // Reset volume to initial value and period timer
-        int registerValue = readByte(registerAddress);
+        // Reset volume to the value latched in NRx2.
         volume = (registerValue >>> 4) & 0xF;
         period = registerValue & 0x7;
         periodTimer = period;
         upwards = (registerValue & 0x08) != 0;
+    }
+
+    public boolean isDacEnabled() {
+        return (registerValue & 0b1111_1000) != 0;
     }
 
     public boolean acceptsAddress(int address) {
@@ -55,16 +66,17 @@ public class VolumeEnvelope {
 
     public int readByte(int address) {
         if (address == registerAddress) {
-            return (volume << 4) | (upwards ? 0x08 : 0) | period;
+            return registerValue & 0xFF;
         }
         throw new RuntimeException("Invalid address");
     }
 
     public void writeByte(int address, int value) {
         if (address == registerAddress) {
-            upwards = (value & 0x08) != 0;
-            period = value & 0x07;
-            volume = (value >>> 4) & 0x0F;
+            registerValue = value & 0xFF;
+            upwards = (registerValue & 0x08) != 0;
+            period = registerValue & 0x07;
+            volume = (registerValue >>> 4) & 0x0F;
             periodTimer = period;
         } else {
             throw new RuntimeException("Invalid address");

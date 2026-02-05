@@ -6,6 +6,8 @@ package gbc.model.sound;
  * control
  */
 public class SquareChannel {
+    // TODO: Implement exact length/sweep/envelope timing quirks and trigger edge
+    // cases.
     private final int volumeRegisterAddress;
     private final int lengthDutyRegisterAddress;
     private final int freqLowRegisterAddress;
@@ -22,6 +24,8 @@ public class SquareChannel {
     private final float[] samples = new float[2];
     private boolean enabled;
     private int lengthTimer;
+    // Cached current sample for fast access
+    private float currentSample;
 
     public SquareChannel(int lengthRegisterAddress, int volumeRegisterAddress, boolean useSweep,
             int frequencyLowDataRegisterAddress, int frequencyHighDataRegisterAddress) {
@@ -81,7 +85,39 @@ public class SquareChannel {
         return samples;
     }
 
-    private void stepLength() {
+    /** Batch step frequency timer by multiple cycles */
+    public void stepCycles(int cycles) {
+        if (!enabled || !isDacOn()) {
+            currentSample = 0f;
+            return;
+        }
+
+        int frequency = getFrequency();
+        if (sweep != null) {
+            frequency = sweep.getFrequency(frequency);
+        }
+        int period = (2048 - frequency) * 4;
+        if (period <= 0)
+            period = 1;
+
+        frequencyTimer -= cycles;
+        while (frequencyTimer <= 0) {
+            frequencyTimer += period;
+            dutyPosition = (dutyPosition + 1) & 7;
+        }
+
+        // Update cached sample
+        float[] duty = Apu.WAVE_DUTY[lengthDutyRegister >>> 6];
+        currentSample = duty[dutyPosition] * volumeEnvelope.getVolume();
+    }
+
+    /** Get current sample value (precalculated) */
+    public float getCurrentSample() {
+        return currentSample;
+    }
+
+    /** Step length counter (called by frame sequencer) */
+    public void stepLength() {
         if (isLengthTimerEnabled()) {
             lengthTimer--;
             if (lengthTimer <= 0) {
@@ -90,12 +126,26 @@ public class SquareChannel {
         }
     }
 
+    /** Step sweep (called by frame sequencer) */
+    public void stepSweep() {
+        if (sweep != null) {
+            sweep.step();
+        }
+    }
+
+    /** Step envelope (called by frame sequencer) */
+    public void stepEnvelope() {
+        volumeEnvelope.step();
+    }
+
     private int getFrequency() {
         return freqLowRegister | ((freqHighRegister & 0b111) << 8);
     }
 
     private void triggerEvent() {
         enabled = true;
+        dutyPosition = 0;
+        frequencyTimer = (2048 - getFrequency()) * 4;
         volumeEnvelope.triggerEvent();
         if (sweep != null) {
             sweep.triggerEvent(getFrequency());
@@ -111,8 +161,7 @@ public class SquareChannel {
     }
 
     private boolean isDacOn() {
-        // DAC is on if bits 3-7 of volume register are not all zero
-        return (volumeEnvelope.readByte(volumeRegisterAddress) & 0b1111_1000) > 0;
+        return volumeEnvelope.isDacEnabled();
     }
 
     private boolean isLengthTimerEnabled() {
@@ -135,7 +184,8 @@ public class SquareChannel {
             return lengthDutyRegister | 0b0011_1111;
         }
         if (address == freqLowRegisterAddress) {
-            return freqLowRegister;
+            // NR13/NR23 are write-only.
+            return 0xFF;
         }
         if (address == freqHighRegisterAddress) {
             return freqHighRegister | 0b1011_1111;
@@ -154,9 +204,7 @@ public class SquareChannel {
         if (address == lengthDutyRegisterAddress) {
             // Update length timer when writing to duty/length register
             int newLength = 64 - (value & 0b0011_1111);
-            if (lengthTimer == 0) {
-                lengthTimer = newLength;
-            }
+            lengthTimer = newLength;
             lengthDutyRegister = value & 0b1100_0000; // Duty bits only
             return;
         }

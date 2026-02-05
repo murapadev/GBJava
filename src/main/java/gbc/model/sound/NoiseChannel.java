@@ -5,6 +5,8 @@ package gbc.model.sound;
  * Generates pseudo-random noise using LFSR
  */
 public class NoiseChannel {
+    // TODO: Validate LFSR timing/width mode and envelope behavior against hardware
+    // tests.
     private final float[] samples = new float[2];
     private int polynomialRegister;
     private int lengthCounter;
@@ -18,6 +20,8 @@ public class NoiseChannel {
     private int periodTimer;
     private int volume;
     private int frequencyTimer;
+    // Cached current sample
+    private float currentSample;
 
     public float[] step(boolean stepLength, boolean stepEnvelope) {
         // Step timing systems
@@ -29,9 +33,7 @@ public class NoiseChannel {
         }
 
         if (frequencyTimer == 0) {
-            // Calculate divisor
-            int divisorCode = polynomialRegister & 0x07;
-            frequencyTimer = (divisorCode == 0 ? 8 : divisorCode << 4) << (polynomialRegister >>> 4);
+            frequencyTimer = calculateFrequencyTimer();
 
             // Update LFSR
             int xorResult = (lfsr & 0b01) ^ ((lfsr & 0b10) >> 1);
@@ -57,7 +59,41 @@ public class NoiseChannel {
         return samples;
     }
 
-    private void stepLength() {
+    /** Batch step frequency timer by multiple cycles */
+    public void stepCycles(int cycles) {
+        if (!dacOn || !enabled) {
+            currentSample = 0f;
+            return;
+        }
+
+        int freqPeriod = calculateFrequencyTimer();
+        if (freqPeriod <= 0)
+            freqPeriod = 1;
+
+        frequencyTimer -= cycles;
+        while (frequencyTimer <= 0) {
+            frequencyTimer += freqPeriod;
+
+            // Update LFSR
+            int xorResult = (lfsr & 0b01) ^ ((lfsr & 0b10) >> 1);
+            lfsr = (lfsr >> 1) | (xorResult << 14);
+            if ((polynomialRegister >>> 3 & 0b01) != 0) {
+                lfsr &= ~(1 << 6);
+                lfsr |= xorResult << 6;
+            }
+        }
+
+        // Update cached sample
+        currentSample = ((~lfsr & 0b1) * volume) / 15f;
+    }
+
+    /** Get current sample value */
+    public float getCurrentSample() {
+        return currentSample;
+    }
+
+    /** Step length counter (called by frame sequencer) */
+    public void stepLength() {
         if (lengthEnabled && lengthCounter > 0) {
             lengthCounter--;
             if (lengthCounter == 0) {
@@ -66,7 +102,8 @@ public class NoiseChannel {
         }
     }
 
-    private void stepEnvelope() {
+    /** Step envelope (called by frame sequencer) */
+    public void stepEnvelope() {
         if (period != 0) {
             if (periodTimer > 0) {
                 periodTimer--;
@@ -98,8 +135,8 @@ public class NoiseChannel {
             return 0xFF;
         }
         if (address == 0xFF20) {
-            // NR41 is write-only, bits 7-6 unused (return 1), bits 5-0 return 0
-            return 0xC0;
+            // NR41 is write-only; all bits return 1 on read
+            return 0xFF;
         }
         if (address == 0xFF21) {
             return initialVolume << 4 | (incrementing ? 0x08 : 0) | period;
@@ -144,13 +181,22 @@ public class NoiseChannel {
                 enabled = true;
             }
             if (trigger) {
+                if (lengthCounter == 0) {
+                    lengthCounter = 64;
+                }
                 lfsr = 0x7FFF;
                 periodTimer = period;
                 volume = initialVolume;
+                frequencyTimer = calculateFrequencyTimer();
             }
             return;
         }
 
         throw new RuntimeException("Invalid address: " + Integer.toHexString(address));
+    }
+
+    private int calculateFrequencyTimer() {
+        int divisorCode = polynomialRegister & 0x07;
+        return (divisorCode == 0 ? 8 : divisorCode << 4) << (polynomialRegister >>> 4);
     }
 }

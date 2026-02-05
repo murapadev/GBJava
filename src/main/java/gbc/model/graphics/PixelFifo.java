@@ -5,6 +5,7 @@ package gbc.model.graphics;
  * Handles queuing pixels and outputting them to the screen.
  */
 public interface PixelFifo {
+    // TODO: Define precise overlay/priority semantics shared by DMG/CGB implementations.
 
     /**
      * Get the current length of the FIFO queue.
@@ -43,6 +44,14 @@ public interface PixelFifo {
      * @param oamIndex         OAM index for sprite priority
      */
     void setOverlay(int[] pixelLine, int offset, TileAttributes spriteAttributes, int oamIndex);
+
+    /**
+     * Variant used by the fetcher when sprite X has already been latched during
+     * OAM search. Implementations that don't need X can ignore it.
+     */
+    default void setOverlay(int[] pixelLine, int offset, TileAttributes spriteAttributes, int oamIndex, int spriteX) {
+        setOverlay(pixelLine, offset, spriteAttributes, oamIndex);
+    }
 
     /**
      * Clear the FIFO.

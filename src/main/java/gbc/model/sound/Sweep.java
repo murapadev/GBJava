@@ -5,6 +5,7 @@ package gbc.model.sound;
  * Handles automatic frequency changes over time
  */
 public class Sweep {
+    // TODO: Emulate sweep overflow/negate quirks and shadow frequency timing precisely.
     private int shadowFrequency;
     private int timer;
     private int period;
@@ -26,7 +27,7 @@ public class Sweep {
         if (timer == 0) {
             timer = period > 0 ? period : 8;
 
-            if (enabled && period > 0) {
+            if (enabled && shift > 0) {
                 int newFrequency = calculateFrequency();
 
                 if (newFrequency <= 2047 && shift > 0) {
@@ -62,6 +63,7 @@ public class Sweep {
 
     public void triggerEvent(int frequency) {
         shadowFrequency = frequency;
+        this.frequency = frequency;
         timer = period > 0 ? period : 8;
         enabled = period > 0 || shift > 0;
         if (shift > 0) {

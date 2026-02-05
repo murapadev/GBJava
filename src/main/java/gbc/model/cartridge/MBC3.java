@@ -1,6 +1,7 @@
 package gbc.model.cartridge;
 
 public class MBC3 extends Cartridge {
+	// TODO: Implement accurate RTC latch behavior and persist RTC state across sessions.
 	private int romBankNumber = 1; // Default ROM bank
 	private int ramBankNumber = 0; // Default RAM bank
 	private boolean ramEnabled = false;

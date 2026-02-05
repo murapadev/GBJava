@@ -15,11 +15,11 @@ public class DmgPixelFifo implements PixelFifo {
     private final IntQueue objBehindBg = new IntQueue(16); // 1 = OBJ behind BG, 0 = OBJ above BG
     private final IntQueue objPriority = new IntQueue(16); // lower value = higher priority
     private final Memory memory;
-    private final Screen screen;
+    private final FrameBuffer frameBuffer;
     private int x;
 
-    public DmgPixelFifo(Screen screen, Memory memory) {
-        this.screen = screen;
+    public DmgPixelFifo(FrameBuffer frameBuffer, Memory memory) {
+        this.frameBuffer = frameBuffer;
         this.memory = memory;
         this.x = 0;
     }
@@ -43,7 +43,7 @@ public class DmgPixelFifo implements PixelFifo {
 
         if (x < 160 && y < 144) {
             int color = resolveColor(bgPixel, bgPalette, objPixel, objPalette, objPaletteIndex, objBehind);
-            screen.setPixel(x, y, color);
+            frameBuffer.setPixel(x, y, color);
         }
         x++;
     }
@@ -58,6 +58,7 @@ public class DmgPixelFifo implements PixelFifo {
         if (objBehind != 0) {
             return getDmgColor(bgPixel, bgPalette, false, 0);
         }
+        // TODO: Verify DMG sprite priority rules for overlapping sprites and BG color 0 edge cases.
         return getDmgColor(objPixel, objPalette, true, objPaletteIndex);
     }
 
@@ -118,44 +119,51 @@ public class DmgPixelFifo implements PixelFifo {
      */
     @Override
     public void setOverlay(int[] pixelLine, int offset, TileAttributes spriteAttributes, int oamIndex) {
-        boolean priority = spriteAttributes.isPriority();
-        // Read sprite palette registers based on sprite attributes (DMG: bit 4 of OAM
-        // attr byte)
-        // For DMG, we need to check bit 4 of the sprite attributes byte
-        int spriteAttrByte = memory.getOamByte(oamIndex * 4 + 3);
-        int paletteIndex = (spriteAttrByte & 0x10) != 0 ? 1 : 0;
-        int overlayPalette = paletteIndex != 0 ? memory.getObp1() : memory.getObp0(); // Bit 4: 0=OBP0, 1=OBP1
         int spriteX = (memory.getOamByte(oamIndex * 4 + 1) & 0xFF) - 8;
+        setOverlay(pixelLine, offset, spriteAttributes, oamIndex, spriteX);
+    }
+
+    @Override
+    public void setOverlay(int[] pixelLine, int offset, TileAttributes spriteAttributes, int oamIndex, int spriteX) {
+        boolean priority = spriteAttributes.isPriority();
+        boolean xflip = spriteAttributes.isXflip();
+        int paletteIndex = spriteAttributes.getDmgObjPaletteIndex();
+        int overlayPalette = paletteIndex != 0 ? memory.getObp1() : memory.getObp0(); // Bit 4: 0=OBP0, 1=OBP1
         int priorityKey = (spriteX << 8) | (oamIndex & 0xFF);
+        // TODO: Consider OAM search ordering vs X sorting for DMG sprite conflicts.
 
         int fifoSize = bgPixels.size();
-        for (int j = Math.max(0, offset); j < pixelLine.length; j++) {
-            int p = pixelLine[j];
-            int i = j - offset;
-            if (i < 0 || i >= fifoSize) {
-                break;
+        for (int screenIndex = 0; screenIndex < 8; screenIndex++) {
+            int fifoIndex = screenIndex - offset;
+            if (fifoIndex < 0 || fifoIndex >= fifoSize) {
+                continue;
             }
+            int srcIndex = xflip ? (7 - screenIndex) : screenIndex;
+            if (srcIndex < 0 || srcIndex >= pixelLine.length) {
+                continue;
+            }
+            int p = pixelLine[srcIndex];
             if (p == 0) {
                 continue;
             }
-            if (objPixels.get(i) != 0) {
-                int existingPriority = objPriority.get(i);
+            if (objPixels.get(fifoIndex) != 0) {
+                int existingPriority = objPriority.get(fifoIndex);
                 if (priorityKey >= existingPriority) {
                     continue; // Lower priority sprite loses
                 }
                 // Higher priority sprite wins; override
-                objPixels.set(i, p);
-                objPalettes.set(i, overlayPalette);
-                objPaletteIndices.set(i, paletteIndex);
-                objBehindBg.set(i, priority ? 1 : 0);
-                objPriority.set(i, priorityKey);
+                objPixels.set(fifoIndex, p);
+                objPalettes.set(fifoIndex, overlayPalette);
+                objPaletteIndices.set(fifoIndex, paletteIndex);
+                objBehindBg.set(fifoIndex, priority ? 1 : 0);
+                objPriority.set(fifoIndex, priorityKey);
                 continue;
             }
-            objPixels.set(i, p);
-            objPalettes.set(i, overlayPalette);
-            objPaletteIndices.set(i, paletteIndex);
-            objBehindBg.set(i, priority ? 1 : 0);
-            objPriority.set(i, priorityKey);
+            objPixels.set(fifoIndex, p);
+            objPalettes.set(fifoIndex, overlayPalette);
+            objPaletteIndices.set(fifoIndex, paletteIndex);
+            objBehindBg.set(fifoIndex, priority ? 1 : 0);
+            objPriority.set(fifoIndex, priorityKey);
         }
     }
 

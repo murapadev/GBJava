@@ -14,6 +14,10 @@ public class PixelTransfer {
 
     private int x; // Current X position on scanline
     private int droppedPixels; // Pixels dropped for window/scx alignment
+    private int windowPixelsToDrop;
+    private int windowDroppedPixels;
+    private int scxLatch;
+    private boolean scxLatched;
     private int windowLine; // Window internal line counter
     private int lastLy;
     private boolean windowActive;
@@ -28,11 +32,17 @@ public class PixelTransfer {
 
     public void start() {
         int ly = memory.getLy();
-        if (ly == 0) {
+        if (!scxLatched) {
+            scxLatch = memory.getScx() & 0xFF;
+        }
+        scxLatched = false;
+        // Reset window line when a new frame starts or LY jumps backwards
+        // (LCD off/on or explicit LY reset behavior).
+        if (ly == 0 || ly < lastLy) {
             windowLine = 0;
-            lastLy = 0;
             windowUsedLastLine = false;
-        } else if (ly != lastLy) {
+        }
+        if (ly != lastLy) {
             if (windowUsedLastLine) {
                 windowLine++;
             }
@@ -42,8 +52,11 @@ public class PixelTransfer {
 
         this.x = 0;
         this.droppedPixels = 0;
+        this.windowPixelsToDrop = 0;
+        this.windowDroppedPixels = 0;
         this.windowActive = false;
         fetcher.init();
+        fetcher.setScxLatch(scxLatch);
 
         // Start fetching background/window tiles
         startFetchingBackground();
@@ -55,6 +68,9 @@ public class PixelTransfer {
             windowActive = true;
             windowUsedLastLine = true;
             droppedPixels = 0;
+            int windowStartX = memory.getWx() - 7;
+            windowPixelsToDrop = Math.max(0, -windowStartX);
+            windowDroppedPixels = 0;
             fifo.clear();
             fetcher.init();
             startFetchingWindow();
@@ -70,7 +86,9 @@ public class PixelTransfer {
             int bestOamIndex = Integer.MAX_VALUE;
             int bestOffset = 0;
             int fifoLen = fifo.getLength();
-            boolean cgbMode = memory.isCgbMode();
+            boolean stallForSprite = false;
+            int stallX = Integer.MAX_VALUE;
+            int stallOamIndex = Integer.MAX_VALUE;
 
             for (int i = 0; i < sprites.length; i++) {
                 SpritePosition s = sprites[i];
@@ -92,25 +110,26 @@ public class PixelTransfer {
                 }
                 int requiredFifo = 8 - offset;
                 if (requiredFifo > fifoLen) {
+                    // If the sprite has reached the current X but the FIFO is
+                    // too short, stall output to let the fetcher fill the FIFO.
+                    if (offset >= 0) {
+                        int oamIndex = s.getOamIndex();
+                        if (s.getX() < stallX || (s.getX() == stallX && oamIndex < stallOamIndex)) {
+                            stallForSprite = true;
+                            stallX = s.getX();
+                            stallOamIndex = oamIndex;
+                        }
+                    }
                     continue;
                 }
-                int oamIndex = (s.getAddress() - 0xFE00) / 4;
-                if (cgbMode) {
-                    // CGB priority: lower OAM index wins
-                    if (oamIndex < bestOamIndex) {
-                        bestIndex = i;
-                        bestX = s.getX();
-                        bestOamIndex = oamIndex;
-                        bestOffset = offset;
-                    }
-                } else {
-                    // DMG priority: lower X wins; tie-breaker lower OAM index
-                    if (s.getX() < bestX || (s.getX() == bestX && oamIndex < bestOamIndex)) {
-                        bestIndex = i;
-                        bestX = s.getX();
-                        bestOamIndex = oamIndex;
-                        bestOffset = offset;
-                    }
+                int oamIndex = s.getOamIndex();
+                // Sprite fetch scheduling is left-to-right on the scanline.
+                // Final pixel priority differences are handled in the FIFO implementation.
+                if (s.getX() < bestX || (s.getX() == bestX && oamIndex < bestOamIndex)) {
+                    bestIndex = i;
+                    bestX = s.getX();
+                    bestOamIndex = oamIndex;
+                    bestOffset = offset;
                 }
             }
 
@@ -118,10 +137,13 @@ public class PixelTransfer {
                 SpritePosition s = sprites[bestIndex];
                 fetcher.addSprite(s, bestOffset, bestOamIndex);
                 sprites[bestIndex].disable();
+            } else if (stallForSprite && !fetcher.isFetchingDisabled()) {
+                return x < 160;
             }
         }
 
-        // Stall pixel output while sprite fetch is in progress (approximate hardware behavior)
+        // Keep pixel output stalled while sprite fetch is in progress.
+        // This avoids dropping early sprite pixels when the overlay is not ready yet.
         if (fetcher.spriteInProgress()) {
             return x < 160;
         }
@@ -133,6 +155,9 @@ public class PixelTransfer {
                 fifo.dropPixel();
                 droppedPixels++;
                 // Do not increment x, do not put pixel to screen
+            } else if (windowActive && windowDroppedPixels < windowPixelsToDrop) {
+                fifo.dropPixel();
+                windowDroppedPixels++;
             } else if (x < 160) {
                 fifo.putPixelToScreen();
                 x++;
@@ -151,7 +176,8 @@ public class PixelTransfer {
 
     private void startFetchingBackground() {
         int lcdc = memory.getLcdc();
-        boolean bgEnabled = (lcdc & 0x01) != 0;
+        // DMG: bit 0 disables BG. CGB: BG is always enabled; bit 0 only affects priority.
+        boolean bgEnabled = memory.isCgbMode() || (lcdc & 0x01) != 0;
 
         if (!bgEnabled) {
             // If background is disabled, disable fetching - pixels will be handled in
@@ -168,9 +194,8 @@ public class PixelTransfer {
         int ly = memory.getLy();
         int scy = memory.getScy();
         int bgY = (ly + scy) & 0xFF;
-        int xOffset = (getScx() / 8) & 0x1F;
-
-        fetcher.startFetching(bgMapBase, bgTileDataBase, xOffset, tileIdSigned, bgY);
+        // Start at tile 0; SCX upper bits are sampled per tile fetch.
+        fetcher.startFetching(bgMapBase, bgTileDataBase, 0, tileIdSigned, bgY, true, true);
     }
 
     private void startFetchingWindow() {
@@ -179,11 +204,11 @@ public class PixelTransfer {
         int windowTileDataBase = (lcdc & 0x10) != 0 ? 0x8000 : 0x9000;
         boolean tileIdSigned = (lcdc & 0x10) == 0;
 
-        fetcher.startFetching(windowMapBase, windowTileDataBase, 0, tileIdSigned, windowLine);
+        fetcher.startFetching(windowMapBase, windowTileDataBase, 0, tileIdSigned, windowLine, false, false);
     }
 
     private int getScx() {
-        return memory.getScx();
+        return scxLatch;
     }
 
     private boolean spritesEnabled() {
@@ -192,6 +217,9 @@ public class PixelTransfer {
 
     private boolean shouldStartWindow() {
         int lcdc = memory.getLcdc();
+        if (!memory.isCgbMode() && (lcdc & 0x01) == 0) {
+            return false;
+        }
         boolean windowEnabled = (lcdc & 0x20) != 0;
         if (!windowEnabled) {
             return false;
@@ -207,6 +235,7 @@ public class PixelTransfer {
         if (windowStartX >= 160) {
             return false;
         }
+        // TODO: Verify window trigger rules (WX/WY edge cases and mid-line behavior).
         return x >= windowStartX;
     }
 
@@ -214,7 +243,19 @@ public class PixelTransfer {
     public void reset() {
         this.x = 0;
         this.droppedPixels = 0;
+        this.windowPixelsToDrop = 0;
+        this.windowDroppedPixels = 0;
         this.windowActive = false;
+        this.scxLatched = false;
         fifo.clear();
+    }
+
+    public void setScxLatch(int scx) {
+        this.scxLatch = scx & 0xFF;
+        this.scxLatched = true;
+    }
+
+    public int getCurrentX() {
+        return x;
     }
 }

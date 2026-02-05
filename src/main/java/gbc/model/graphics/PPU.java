@@ -6,8 +6,12 @@ import java.util.logging.Logger;
 import gbc.model.memory.Memory;
 
 public class PPU {
+    // TODO: Move to dot-accurate pipeline and separate DMG/CGB renderers for
+    // priority/attribute quirks.
     private static final Logger LOGGER = Logger.getLogger(PPU.class.getName());
+    private static final boolean PPU_TRACE = Boolean.getBoolean("gbc.ppu.trace");
     private Memory memory;
+    private FrameBuffer frameBuffer;
     private Screen screen;
 
     private int mode; // Current mode of the PPU
@@ -19,8 +23,12 @@ public class PPU {
     private PixelTransfer pixelTransfer;
     private OamSearch oamSearch;
 
-    public PPU(Memory memory, Screen screen) {
+    // Cached state for faster mode checking
+    private boolean inMode3;
+
+    public PPU(Memory memory, FrameBuffer frameBuffer, Screen screen) {
         this.memory = memory;
+        this.frameBuffer = frameBuffer;
         this.screen = screen;
         this.mode = 2; // Start in OAM mode
         this.modeClock = 0;
@@ -33,6 +41,7 @@ public class PPU {
     public void reset() {
         this.mode = 2; // Start in OAM mode
         this.modeClock = 0;
+        this.inMode3 = false;
         rebuildPipeline();
         this.pixelFifo.reset();
         this.fetcher.reset();
@@ -40,7 +49,7 @@ public class PPU {
     }
 
     public void tick(int cycles) {
-        if (Boolean.getBoolean("gbc.ppu.trace")) {
+        if (PPU_TRACE) {
             LOGGER.log(Level.FINE, () -> "LY=" + memory.getLy() + ", mode=" + (memory.getStat() & 0x03)
                     + ", modeClock=" + modeClock);
         }
@@ -48,11 +57,17 @@ public class PPU {
             return;
         }
 
-        // The mode is now managed by the Memory class. We just react to it.
-        int currentMode = memory.getStat() & 0x03;
-
-        if (currentMode == 3) { // Pixel Transfer mode
-            for (int i = 0; i < cycles; i++) {
+        // Fast path using cached mode state
+        if (inMode3) {
+            int i = 0;
+            int end4 = cycles - 3;
+            for (; i < end4; i += 4) {
+                pixelTransfer.tick();
+                pixelTransfer.tick();
+                pixelTransfer.tick();
+                pixelTransfer.tick();
+            }
+            for (; i < cycles; i++) {
                 pixelTransfer.tick();
             }
         }
@@ -62,12 +77,12 @@ public class PPU {
         if (oldMode == newMode) {
             return;
         }
+        inMode3 = (newMode == 3);
         switch (newMode) {
             case 0: // HBlank
-                // HBlank actions can be added here if needed
                 break;
             case 1: // VBlank
-                // VBlank is the time to render the frame to the screen
+                frameBuffer.swapBuffers();
                 screen.render();
                 break;
             case 2: // OAM Search
@@ -76,6 +91,7 @@ public class PPU {
                 oamSearch.searchSprites(currentLine);
                 pixelFifo.clear();
                 pixelTransfer.reset();
+                pixelTransfer.setScxLatch(oamSearch.getLatchedScx());
                 break;
             case 3: // Pixel Transfer
                 pixelTransfer.start();
@@ -85,9 +101,9 @@ public class PPU {
 
     private void rebuildPipeline() {
         if (memory.isCgbMode()) {
-            this.pixelFifo = new CgbPixelFifo(screen, memory);
+            this.pixelFifo = new CgbPixelFifo(frameBuffer, memory);
         } else {
-            this.pixelFifo = new DmgPixelFifo(screen, memory);
+            this.pixelFifo = new DmgPixelFifo(frameBuffer, memory);
         }
         this.fetcher = new Fetcher(pixelFifo, memory);
         this.pixelTransfer = new PixelTransfer(pixelFifo, fetcher, memory, oamSearch.getSprites());
@@ -103,6 +119,10 @@ public class PPU {
 
     public void setScreen(Screen screen) {
         this.screen = screen;
+    }
+
+    public FrameBuffer getFrameBuffer() {
+        return this.frameBuffer;
     }
 
     public int getMode() {
@@ -128,13 +148,32 @@ public class PPU {
     public void updateGraphics() {
         screen.render();
     }
-    
+
     /**
      * Returns the calculated Mode 3 duration for the current scanline.
      * This varies based on SCX value and number of sprites found during OAM search.
      * Used by Memory for accurate LCD timing.
      */
     public int getMode3Duration() {
+        int baseDuration = getBaseMode3Duration();
+        int lcdCycle = memory.getLcdCycleCounter();
+        int elapsedMode3 = Math.max(0, lcdCycle - 80);
+        int transferredPixels = Math.max(0, Math.min(160, getPixelTransferProgress()));
+        int remainingPixels = 160 - transferredPixels;
+        int dynamicMinimum = elapsedMode3 + remainingPixels;
+        int duration = Math.max(baseDuration, dynamicMinimum);
+        return Math.min(289, duration);
+    }
+
+    protected int getBaseMode3Duration() {
         return oamSearch.getMode3Duration();
+    }
+
+    protected int getPixelTransferProgress() {
+        return pixelTransfer != null ? pixelTransfer.getCurrentX() : 0;
+    }
+
+    public boolean isPixelTransferComplete() {
+        return pixelTransfer == null || pixelTransfer.getCurrentX() >= 160;
     }
 }

@@ -1,7 +1,6 @@
 package gbc.model.graphics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,7 +10,7 @@ import gbc.model.memory.Memory;
 public class PixelTransferMultiLineTest {
 
     private TestMemory memory;
-    private TestScreen screen;
+    private TestFrameBuffer frameBuffer;
     private DmgPixelFifo fifo;
     private Fetcher fetcher;
     private PixelTransfer pixelTransfer;
@@ -20,8 +19,8 @@ public class PixelTransferMultiLineTest {
     @BeforeEach
     public void setup() {
         memory = new TestMemory();
-        screen = new TestScreen();
-        fifo = new DmgPixelFifo(screen, memory);
+        frameBuffer = new TestFrameBuffer();
+        fifo = new DmgPixelFifo(frameBuffer, memory);
         fetcher = new Fetcher(fifo, memory);
         sprites = new SpritePosition[0];
         pixelTransfer = new PixelTransfer(fifo, fetcher, memory, sprites);
@@ -33,35 +32,34 @@ public class PixelTransferMultiLineTest {
         // Setup for Line 0
         memory.setLy(0);
         memory.setScx(0);
-        
+
         // Emulate Start of Line 0 (normally done by PPU)
         pixelTransfer.reset();          // THIS IS CRITICAL - PPU MUST CALL THIS
-        fetcher.start(0); 
-        
+        fetcher.start(0);
+
         // Run Line 0
         runLine();
-        
-        System.out.println("Line 0 Drawn pixels: " + screen.drawnPixels);
-        assertEquals(160, screen.drawnPixels, "Line 0 should draw 160 pixels");
-        
+
+        System.out.println("Line 0 Drawn pixels: " + frameBuffer.drawnPixels);
+        assertEquals(160, frameBuffer.drawnPixels, "Line 0 should draw 160 pixels");
+
         // Setup for Line 1
         memory.setLy(1);
-        screen.drawnPixels = 0; // Reset counter for test
-        
+        frameBuffer.drawnPixels = 0; // Reset counter for test
+
         // Emulate Start of Line 1
         pixelTransfer.reset();          // THIS IS CRITICAL
         fetcher.start(1);
-        
+
         // Run Line 1
         runLine();
-        
-        assertEquals(160, screen.drawnPixels, "Line 1 should draw 160 pixels (requires reset of x)");
+
+        assertEquals(160, frameBuffer.drawnPixels, "Line 1 should draw 160 pixels (requires reset of x)");
     }
 
     private void runLine() {
         int cycles = 0;
-        int maxCycles = 1000;
-        int i = 0;
+        int maxCycles = 2000;
         // pixelTransfer.tick() returns true while x < 160.
         // We simulate PPU calling tick() many times.
         while (cycles < maxCycles) {
@@ -80,7 +78,7 @@ public class PixelTransferMultiLineTest {
         public void setBgp(int v) { bgp = v; }
         @Override public int getLy() { return ly; }
         public void setLy(int v) { ly = v; }
-        
+
         @Override
         public int readByte(int address) {
             if (address >= 0x9800 && address < 0xA000) return 0; // Tile 0
@@ -88,14 +86,12 @@ public class PixelTransferMultiLineTest {
             return 0;
         }
     }
-    
-    static class TestScreen extends Screen {
+
+    static class TestFrameBuffer extends FrameBuffer {
         public int drawnPixels = 0;
         @Override
         public void setPixel(int x, int y, int color) {
             if (x >= 0 && x < 160) drawnPixels++;
         }
-        @Override public void repaint() {}
-        @Override public void render() {}
     }
 }

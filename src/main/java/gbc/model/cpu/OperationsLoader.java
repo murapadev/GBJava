@@ -1,12 +1,12 @@
 package gbc.model.cpu;
 
-import gbc.model.memory.Memory;
-
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import gbc.model.memory.Memory;
 
 /**
  * Loads operations, builds flat and grouped opcode maps, and supplies
@@ -20,11 +20,17 @@ import java.util.logging.Logger;
  * flow.
  */
 public class OperationsLoader {
+    // TODO: Validate opcode tables/cycle counts and replace fallback executor paths
+    // with real behavior.
 
     private static final Logger LOGGER = Logger.getLogger(OperationsLoader.class.getName());
 
     private final Map<Integer, Operation> operations;
     private final Map<Integer, Operation> cbOperations;
+
+    // Fast lookup arrays for O(1) access (256 opcodes each)
+    private final Operation[] operationsArray = new Operation[256];
+    private final Operation[] cbOperationsArray = new Operation[256];
 
     private final EnumMap<OperationType, Map<Integer, Operation>> groupedOperations;
     private final EnumMap<OperationType, Map<Integer, Operation>> groupedCbOperations;
@@ -53,31 +59,71 @@ public class OperationsLoader {
     private void loadOperations() {
         EnumMap<OperationType, Map<Integer, Operation>> unprefixed = OperationDefinitions.buildUnprefixedTable();
         EnumMap<OperationType, Map<Integer, Operation>> cbprefixed = OperationDefinitions.buildCbPrefixedTable();
-        registerGroup(unprefixed, operations, groupedOperations);
-        registerGroup(cbprefixed, cbOperations, groupedCbOperations);
+        registerGroup(unprefixed, operations, groupedOperations, false);
+        registerGroup(cbprefixed, cbOperations, groupedCbOperations, true);
+        ensureAllOpcodesRegistered(operations, groupedOperations, false);
+        ensureAllOpcodesRegistered(cbOperations, groupedCbOperations, true);
+
+        // Populate fast lookup arrays
+        for (int i = 0; i < 256; i++) {
+            operationsArray[i] = operations.get(i);
+            cbOperationsArray[i] = cbOperations.get(i);
+        }
     }
 
     private void registerGroup(EnumMap<OperationType, Map<Integer, Operation>> source,
             Map<Integer, Operation> flatTarget,
-            EnumMap<OperationType, Map<Integer, Operation>> groupedTarget) {
+            EnumMap<OperationType, Map<Integer, Operation>> groupedTarget,
+            boolean cbPrefixed) {
 
         for (Map.Entry<OperationType, Map<Integer, Operation>> entry : source.entrySet()) {
             OperationType type = entry.getKey();
             Map<Integer, Operation> bucket = groupedTarget.computeIfAbsent(type, ignored -> new HashMap<>());
 
             for (Map.Entry<Integer, Operation> opEntry : entry.getValue().entrySet()) {
+                int opcode = opEntry.getKey() & 0xFF;
                 Operation op = opEntry.getValue();
                 OperationExecutor exec = createExecutorForOperation(op);
                 if (exec == null) {
-                    // Leave opcode unregistered to avoid executing without behaviour
+                    // Keep opcode registered with INVALID executor to avoid null lookups.
+                    Operation invalid = createInvalidOperation(op.isImmediate() ? op.getBytes() : 1, cbPrefixed,
+                            op.isImmediate());
+                    invalid.setExecutor(createExecutorForOperation(invalid));
+                    flatTarget.put(opcode, invalid);
+                    bucket.put(opcode, invalid);
                     continue;
                 }
                 op.setExecutor(exec);
-                int opcode = opEntry.getKey() & 0xFF;
                 flatTarget.put(opcode, op);
                 bucket.put(opcode, op);
             }
         }
+    }
+
+    private void ensureAllOpcodesRegistered(Map<Integer, Operation> flatTarget,
+            EnumMap<OperationType, Map<Integer, Operation>> groupedTarget,
+            boolean cbPrefixed) {
+        Map<Integer, Operation> miscBucket = groupedTarget.computeIfAbsent(OperationType.MISC,
+                ignored -> new HashMap<>());
+        for (int opcode = 0; opcode <= 0xFF; opcode++) {
+            int key = opcode & 0xFF;
+            if (!flatTarget.containsKey(key)) {
+                Operation invalid = createInvalidOperation(cbPrefixed ? 2 : 1, cbPrefixed, false);
+                invalid.setExecutor(createExecutorForOperation(invalid));
+                flatTarget.put(key, invalid);
+                miscBucket.put(key, invalid);
+            }
+        }
+    }
+
+    private Operation createInvalidOperation(int bytes, boolean cbPrefixed, boolean immediate) {
+        Operation op = new Operation();
+        op.setMnemonic("INVALID");
+        op.setBytes(bytes);
+        op.setImmediate(immediate);
+        op.setCycles(java.util.List.of(cbPrefixed ? 8 : 4));
+        op.setType(OperationType.MISC);
+        return op;
     }
 
     private OperationExecutor createExecutorForOperation(Operation op) {
@@ -98,10 +144,11 @@ public class OperationsLoader {
         if ("RETI".equals(m))
             return createRetiExecutor();
 
+        OperandInfo[] cachedOperands = decodeOperands(op);
         if ("LD".equals(m))
-            return createLdExecutor();
+            return createLdExecutor(cachedOperands);
         if ("LDH".equals(m))
-            return createLdhExecutor();
+            return createLdhExecutor(cachedOperands);
 
         if ("JP".equals(m))
             return createJpExecutor();
@@ -178,7 +225,9 @@ public class OperationsLoader {
                 byte second = getImmediateByte(regs, mem);
                 if (second != 0x00) {
                     int unexpected = second & 0xFF;
-                    LOGGER.log(Level.WARNING, () -> String.format("STOP second byte unexpected: 0x%02X", unexpected));
+                    // Log at FINE level to reduce verbosity - this is common in some ROMs
+                    LOGGER.log(Level.FINE, () -> String.format("STOP second byte unexpected: 0x%02X at PC=0x%04X",
+                            unexpected, (regs.getPC() - 2) & 0xFFFF));
                 }
                 if (cpu != null && cpu.isPrepareSpeedSwitch()) {
                     cpu.setDoubleSpeedMode(!cpu.isDoubleSpeedMode());
@@ -207,12 +256,20 @@ public class OperationsLoader {
             return createRstExecutor();
 
         if ("INVALID".equals(m)) {
+            final int opBytes = op.getBytes();
+            final boolean opImmediate = op.isImmediate();
             return (regs, mem, ops) -> {
-                int pc = regs.getPC() & 0xFFFF;
+                int pc = (regs.getPC() - 1) & 0xFFFF;
                 int opcode = mem.readByte(pc) & 0xFF;
                 LOGGER.log(Level.WARNING, () -> String.format("Invalid opcode at PC=0x%04X op=0x%02X", pc, opcode));
-                // Advance 1 to avoid lock
-                regs.incrementPC();
+                if (cpu != null) {
+                    cpu.onInvalidOpcode(pc, opcode);
+                }
+                if (opImmediate && opBytes > 1) {
+                    for (int i = 0; i < opBytes - 1; i++) {
+                        regs.incrementPC();
+                    }
+                }
             };
         }
 
@@ -231,11 +288,11 @@ public class OperationsLoader {
     }
 
     public Operation getOperation(int opcode) {
-        return operations.get(opcode);
+        return operationsArray[opcode & 0xFF];
     }
 
     public Operation getCbOperation(int opcode) {
-        return cbOperations.get(opcode);
+        return cbOperationsArray[opcode & 0xFF];
     }
 
     public Map<Integer, Operation> getOperations(OperationType type) {
@@ -274,6 +331,45 @@ public class OperationsLoader {
 
     private void setCFlag(Registers r, boolean c) {
         r.setRegister("F", (byte) ((r.getRegister("F") & 0xEF) | (c ? 0x10 : 0)));
+    }
+
+    private static final class OperandInfo {
+        private final String name;
+        private final boolean immediate;
+        private final boolean memory;
+
+        private OperandInfo(String name, boolean immediate, boolean memory) {
+            this.name = name;
+            this.immediate = immediate;
+            this.memory = memory;
+        }
+    }
+
+    private OperandInfo[] decodeOperands(Operation op) {
+        if (op == null || op.getOperands() == null || op.getOperands().isEmpty()) {
+            return new OperandInfo[0];
+        }
+        int count = op.getOperands().size();
+        OperandInfo[] out = new OperandInfo[count];
+        for (int i = 0; i < count; i++) {
+            Map<String, Object> operand = op.getOperands().get(i);
+            if (operand == null) {
+                out[i] = null;
+                continue;
+            }
+            String name = (String) operand.get("name");
+            boolean immediate = Boolean.TRUE.equals(operand.get("immediate"));
+            boolean memory = Boolean.TRUE.equals(operand.get("memory"));
+            out[i] = new OperandInfo(name, immediate, memory);
+        }
+        return out;
+    }
+
+    private OperandInfo operandAt(OperandInfo[] operands, int index) {
+        if (operands == null || index < 0 || index >= operands.length) {
+            return null;
+        }
+        return operands[index];
     }
 
     /* ---------------- Immediate helpers ---------------- */
@@ -321,6 +417,7 @@ public class OperationsLoader {
                 }
                 case "BC" -> m.readByte(r.getBC()) & 0xFF;
                 case "DE" -> m.readByte(r.getDE()) & 0xFF;
+                case "C" -> m.readByte(0xFF00 + (r.getRegister("C") & 0xFF)) & 0xFF;
                 default -> 0;
             };
         }
@@ -337,6 +434,68 @@ public class OperationsLoader {
         }
 
         if ("HL".equals(name) && (isImmediate == null || !isImmediate)) {
+            return m.readByte(r.getHL()) & 0xFF;
+        }
+
+        if (!is16BitRegister(name) && !"a8".equals(name) && !"a16".equals(name)
+                && !"d8".equals(name) && !"d16".equals(name) && !"r8".equals(name)) {
+            return r.getRegister(name) & 0xFF;
+        }
+
+        LOGGER.log(Level.WARNING, () -> String.format(
+                "Unhandled operand in readMemoryOrRegister: %s immediate=%s memory=%s",
+                name, isImmediate, isMemory));
+        return 0;
+    }
+
+    private int readMemoryOrRegister(Registers r, Memory m, OperandInfo operand) {
+        if (operand == null) {
+            return 0;
+        }
+        String name = operand.name;
+        boolean isImmediate = operand.immediate;
+        boolean isMemory = operand.memory;
+
+        if (isImmediate) {
+            return switch (name) {
+                case "d8", "a8", "r8" -> getImmediateByte(r, m) & 0xFF;
+                case "d16", "a16" -> getImmediateChar(r, m) & 0xFFFF;
+                default -> 0;
+            };
+        }
+
+        if (isMemory) {
+            return switch (name) {
+                case "HL" -> m.readByte(r.getHL()) & 0xFF;
+                case "HL+" -> {
+                    int v = m.readByte(r.getHL()) & 0xFF;
+                    r.setHL(r.getHL() + 1);
+                    yield v;
+                }
+                case "HL-" -> {
+                    int v = m.readByte(r.getHL()) & 0xFF;
+                    r.setHL(r.getHL() - 1);
+                    yield v;
+                }
+                case "BC" -> m.readByte(r.getBC()) & 0xFF;
+                case "DE" -> m.readByte(r.getDE()) & 0xFF;
+                case "C" -> m.readByte(0xFF00 + (r.getRegister("C") & 0xFF)) & 0xFF;
+                default -> 0;
+            };
+        }
+
+        if (is16BitRegister(name)) {
+            return switch (name) {
+                case "BC" -> r.getBC() & 0xFFFF;
+                case "DE" -> r.getDE() & 0xFFFF;
+                case "HL" -> r.getHL() & 0xFFFF;
+                case "AF" -> r.getAF() & 0xFFFF;
+                case "SP" -> r.getSP() & 0xFFFF;
+                default -> 0;
+            };
+        }
+
+        if ("HL".equals(name) && !isImmediate) {
             return m.readByte(r.getHL()) & 0xFF;
         }
 
@@ -372,6 +531,7 @@ public class OperationsLoader {
                 }
                 case "BC" -> m.writeByte(r.getBC(), (byte) value);
                 case "DE" -> m.writeByte(r.getDE(), (byte) value);
+                case "C" -> m.writeByte(0xFF00 + (r.getRegister("C") & 0xFF), (byte) value);
                 case "a16" -> {
                     LOGGER.log(Level.WARNING, "a16 memory write should be handled by executor");
                 }
@@ -401,44 +561,99 @@ public class OperationsLoader {
         }
     }
 
+    private void writeMemoryOrRegister(Registers r, Memory m, OperandInfo operand, int value) {
+        if (operand == null) {
+            return;
+        }
+        String name = operand.name;
+        boolean isImmediate = operand.immediate;
+        boolean isMemory = operand.memory;
+
+        if (isImmediate) {
+            return; // read-only
+        }
+
+        if (isMemory) {
+            switch (name) {
+                case "HL" -> m.writeByte(r.getHL(), (byte) value);
+                case "HL+" -> {
+                    m.writeByte(r.getHL(), (byte) value);
+                    r.setHL(r.getHL() + 1);
+                }
+                case "HL-" -> {
+                    m.writeByte(r.getHL(), (byte) value);
+                    r.setHL(r.getHL() - 1);
+                }
+                case "BC" -> m.writeByte(r.getBC(), (byte) value);
+                case "DE" -> m.writeByte(r.getDE(), (byte) value);
+                case "C" -> m.writeByte(0xFF00 + (r.getRegister("C") & 0xFF), (byte) value);
+                case "a16" -> {
+                    LOGGER.log(Level.WARNING, "a16 memory write should be handled by executor");
+                }
+                default -> {
+                }
+            }
+            return;
+        }
+
+        if ("HL".equals(name) && !isImmediate) {
+            m.writeByte(r.getHL(), (byte) value);
+            return;
+        }
+
+        if (is16BitRegister(name)) {
+            set16BitRegister(r, name, value & 0xFFFF);
+            return;
+        }
+
+        if (!is16BitRegister(name) && !"a8".equals(name) && !"a16".equals(name)
+                && !"d8".equals(name) && !"d16".equals(name) && !"r8".equals(name)) {
+            r.setRegister(name, (byte) value);
+        } else {
+            LOGGER.log(Level.WARNING, () -> String.format(
+                    "Unhandled operand in writeMemoryOrRegister: %s immediate=%s memory=%s",
+                    name, isImmediate, isMemory));
+        }
+    }
+
     /* ---------------- Arithmetic/Logic factories ---------------- */
 
     private OperationExecutor createArithmeticExecutor(Operation op) {
         String m = op.getMnemonic();
         if ("ADD".equals(m))
-            return createAddExecutor();
+            return createAddExecutor(decodeOperands(op));
         if ("ADC".equals(m))
-            return createAdcExecutor();
+            return createAdcExecutor(decodeOperands(op));
         if ("SUB".equals(m))
-            return createSubExecutor();
+            return createSubExecutor(decodeOperands(op));
         if ("SBC".equals(m))
-            return createSbcExecutor();
+            return createSbcExecutor(decodeOperands(op));
         if ("AND".equals(m))
-            return createAndExecutor();
+            return createAndExecutor(decodeOperands(op));
         if ("OR".equals(m))
-            return createOrExecutor();
+            return createOrExecutor(decodeOperands(op));
         if ("XOR".equals(m))
-            return createXorExecutor();
+            return createXorExecutor(decodeOperands(op));
         if ("CP".equals(m))
-            return createCpExecutor();
+            return createCpExecutor(decodeOperands(op));
         if ("INC".equals(m))
-            return createIncExecutor();
+            return createIncExecutor(decodeOperands(op));
         if ("DEC".equals(m))
-            return createDecExecutor();
+            return createDecExecutor(decodeOperands(op));
         return null;
     }
 
-    private OperationExecutor createAddExecutor() {
+    private OperationExecutor createAddExecutor(OperandInfo[] operands) {
+        final OperandInfo dst = operandAt(operands, 0);
+        final OperandInfo src = operandAt(operands, 1);
+        final String d = dst != null ? dst.name : null;
+        final String s = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 2)
+            if (dst == null || src == null)
                 return;
-            Map<String, Object> dst = ops.get(0);
-            Map<String, Object> src = ops.get(1);
-            String d = (String) dst.get("name");
-            String s = (String) src.get("name");
 
             // ADD HL, rr
-            if ("HL".equals(d) && is16BitRegister(s) && !Boolean.TRUE.equals(dst.get("immediate"))) {
+            if ("HL".equals(d) && is16BitRegister(s) && !dst.immediate) {
                 int hl = r.getHL() & 0xFFFF;
                 int rhs = switch (s) {
                     case "BC" -> r.getBC() & 0xFFFF;
@@ -457,7 +672,12 @@ public class OperationsLoader {
 
             // ADD SP, r8
             if ("SP".equals(d) && "r8".equals(s)) {
-                byte off = getImmediateByte(r, m);
+                byte off = getImmediateByte(r, m); // M2: read offset
+                // M3-M4: two internal M-cycles for 16-bit addition
+                if (cpu != null) {
+                    cpu.tickInternalMcycle();
+                    cpu.tickInternalMcycle();
+                }
                 int sp = r.getSP() & 0xFFFF;
                 int soff = (byte) off; // sign-extend
                 int res = (sp + soff) & 0xFFFF;
@@ -480,20 +700,20 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createAdcExecutor() {
+    private OperationExecutor createAdcExecutor(OperandInfo[] operands) {
+        final OperandInfo dst = operandAt(operands, 0);
+        final OperandInfo src = operandAt(operands, 1);
+        final String d = dst != null ? dst.name : null;
+        final String s = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 2)
+            if (dst == null || src == null)
                 return;
-            Map<String, Object> dst = ops.get(0);
-            Map<String, Object> src = ops.get(1);
-            String d = (String) dst.get("name");
-            String s = (String) src.get("name");
 
             byte a = r.getRegister(d);
             byte carry = (byte) ((r.getRegister("F") & 0x10) >> 4);
             byte b = "d8".equals(s)
                     ? getImmediateByte(r, m)
-                    : (byte) (("HL".equals(s)) ? m.readByte(r.getHL()) : readMemoryOrRegister(r, m, src));
+                    : (byte) readMemoryOrRegister(r, m, src);
             int res = (a & 0xFF) + (b & 0xFF) + carry;
             byte out = (byte) (res & 0xFF);
             r.setRegister(d, out);
@@ -503,12 +723,12 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createSubExecutor() {
+    private OperationExecutor createSubExecutor(OperandInfo[] operands) {
+        final OperandInfo src = operandAt(operands, operands.length - 1);
+        final String s = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 1)
+            if (src == null)
                 return;
-            Map<String, Object> src = ops.get(0);
-            String s = (String) src.get("name");
             byte a = r.getRegister("A");
             byte b = "d8".equals(s) ? getImmediateByte(r, m) : (byte) readMemoryOrRegister(r, m, src);
             int res = (a & 0xFF) - (b & 0xFF);
@@ -520,12 +740,12 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createSbcExecutor() {
+    private OperationExecutor createSbcExecutor(OperandInfo[] operands) {
+        final OperandInfo src = operandAt(operands, operands.length - 1);
+        final String s = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 1)
+            if (src == null)
                 return;
-            Map<String, Object> src = ops.get(0);
-            String s = (String) src.get("name");
             byte a = r.getRegister("A");
             byte carry = (byte) ((r.getRegister("F") & 0x10) >> 4);
             byte b = "d8".equals(s) ? getImmediateByte(r, m) : (byte) readMemoryOrRegister(r, m, src);
@@ -538,12 +758,12 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createAndExecutor() {
+    private OperationExecutor createAndExecutor(OperandInfo[] operands) {
+        final OperandInfo src = operandAt(operands, operands.length - 1);
+        final String s = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 1)
+            if (src == null)
                 return;
-            Map<String, Object> src = ops.get(0);
-            String s = (String) src.get("name");
             byte a = r.getRegister("A");
             byte b = "d8".equals(s) ? getImmediateByte(r, m) : (byte) (readMemoryOrRegister(r, m, src) & 0xFF);
             byte out = (byte) (a & b);
@@ -552,12 +772,12 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createOrExecutor() {
+    private OperationExecutor createOrExecutor(OperandInfo[] operands) {
+        final OperandInfo src = operandAt(operands, operands.length - 1);
+        final String s = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 1)
+            if (src == null)
                 return;
-            Map<String, Object> src = ops.get(0);
-            String s = (String) src.get("name");
             byte a = r.getRegister("A");
             byte b = "d8".equals(s) ? getImmediateByte(r, m) : (byte) readMemoryOrRegister(r, m, src);
             byte out = (byte) (a | b);
@@ -566,12 +786,12 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createXorExecutor() {
+    private OperationExecutor createXorExecutor(OperandInfo[] operands) {
+        final OperandInfo src = operandAt(operands, operands.length - 1);
+        final String s = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 1)
+            if (src == null)
                 return;
-            Map<String, Object> src = ops.get(0);
-            String s = (String) src.get("name");
             byte a = r.getRegister("A");
             byte b = "d8".equals(s) ? getImmediateByte(r, m) : (byte) readMemoryOrRegister(r, m, src);
             byte out = (byte) (a ^ b);
@@ -580,12 +800,12 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createCpExecutor() {
+    private OperationExecutor createCpExecutor(OperandInfo[] operands) {
+        final OperandInfo src = operandAt(operands, operands.length - 1);
+        final String s = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 1)
+            if (src == null)
                 return;
-            Map<String, Object> src = ops.get(0);
-            String s = (String) src.get("name");
             byte a = r.getRegister("A");
             byte b = "d8".equals(s) ? getImmediateByte(r, m) : (byte) readMemoryOrRegister(r, m, src);
             int res = (a & 0xFF) - (b & 0xFF);
@@ -594,18 +814,15 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createIncExecutor() {
+    private OperationExecutor createIncExecutor(OperandInfo[] operands) {
+        final OperandInfo dst = operandAt(operands, 0);
+        final String d = dst != null ? dst.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 1)
+            if (dst == null)
                 return;
-            Map<String, Object> dst = ops.get(0);
-            String d = (String) dst.get("name");
-            Boolean mem = (Boolean) dst.get("memory");
-            Boolean imm = (Boolean) dst.get("immediate");
 
             // INC (HL)
-            if ((Boolean.TRUE.equals(mem) && "HL".equals(d))
-                    || (mem == null && "HL".equals(d) && imm != null && !imm)) {
+            if (dst.memory && "HL".equals(d)) {
                 byte v = (byte) m.readByte(r.getHL());
                 int res = (v & 0xFF) + 1;
                 byte out = (byte) (res & 0xFF);
@@ -640,18 +857,15 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createDecExecutor() {
+    private OperationExecutor createDecExecutor(OperandInfo[] operands) {
+        final OperandInfo dst = operandAt(operands, 0);
+        final String d = dst != null ? dst.name : null;
         return (r, m, ops) -> {
-            if (ops == null || ops.size() < 1)
+            if (dst == null)
                 return;
-            Map<String, Object> dst = ops.get(0);
-            String d = (String) dst.get("name");
-            Boolean mem = (Boolean) dst.get("memory");
-            Boolean imm = (Boolean) dst.get("immediate");
 
             // DEC (HL)
-            if ((Boolean.TRUE.equals(mem) && "HL".equals(d))
-                    || (mem == null && "HL".equals(d) && imm != null && !imm)) {
+            if (dst.memory && "HL".equals(d)) {
                 byte v = (byte) m.readByte(r.getHL());
                 int res = (v & 0xFF) - 1;
                 byte out = (byte) (res & 0xFF);
@@ -688,14 +902,14 @@ public class OperationsLoader {
 
     /* ---------------- LD / LDH ---------------- */
 
-    private OperationExecutor createLdExecutor() {
+    private OperationExecutor createLdExecutor(OperandInfo[] operands) {
+        final OperandInfo dest = operandAt(operands, 0);
+        final OperandInfo src = operandAt(operands, 1);
+        final String dn = dest != null ? dest.name : null;
+        final String sn = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops.size() != 2)
+            if (dest == null || src == null)
                 return;
-            Map<String, Object> dest = ops.get(0);
-            Map<String, Object> src = ops.get(1);
-            String dn = (String) dest.get("name");
-            String sn = (String) src.get("name");
 
             // (a16),SP
             if ("a16".equals(dn) && "SP".equals(sn)) {
@@ -717,7 +931,10 @@ public class OperationsLoader {
             }
             // HL = SP + r8
             if ("HL".equals(dn) && "SP+r8".equals(sn)) {
-                byte off = getImmediateByte(r, m);
+                byte off = getImmediateByte(r, m); // M2: read offset
+                // M3: internal M-cycle for 16-bit addition
+                if (cpu != null)
+                    cpu.tickInternalMcycle();
                 int sp = r.getSP() & 0xFFFF;
                 int so = (byte) off;
                 int res = (sp + so) & 0xFFFF;
@@ -740,14 +957,14 @@ public class OperationsLoader {
         };
     }
 
-    private OperationExecutor createLdhExecutor() {
+    private OperationExecutor createLdhExecutor(OperandInfo[] operands) {
+        final OperandInfo dest = operandAt(operands, 0);
+        final OperandInfo src = operandAt(operands, 1);
+        final String dn = dest != null ? dest.name : null;
+        final String sn = src != null ? src.name : null;
         return (r, m, ops) -> {
-            if (ops.size() != 2)
+            if (dest == null || src == null)
                 return;
-            Map<String, Object> dest = ops.get(0);
-            Map<String, Object> src = ops.get(1);
-            String dn = (String) dest.get("name");
-            String sn = (String) src.get("name");
 
             if ("A".equals(dn) && "a8".equals(sn)) {
                 int addr = 0xFF00 + (getImmediateByte(r, m) & 0xFF);
@@ -772,14 +989,21 @@ public class OperationsLoader {
             if (ops.isEmpty())
                 return;
             boolean cond = true;
-            if (ops.size() == 2) {
+            boolean isConditional = ops.size() == 2;
+            if (isConditional) {
                 cond = checkCondition(r, (String) ops.get(0).get("name"));
             }
-            int addr = readMemoryOrRegister(r, m, ops.get(ops.size() - 1));
-            if (cond)
+            Map<String, Object> target = ops.get(ops.size() - 1);
+            String targetName = (String) target.get("name");
+            int addr = readMemoryOrRegister(r, m, target);
+            if (cond) {
+                // Internal M-cycle after reading target address (only for JP a16, not JP HL)
+                if (cpu != null && !"HL".equals(targetName))
+                    cpu.tickInternalMcycle();
                 r.setPC(addr);
+            }
             if (cpu != null)
-                cpu.setLastConditionTaken(cond && ops.size() == 2);
+                cpu.setLastConditionTaken(cond && isConditional);
         };
     }
 
@@ -791,9 +1015,13 @@ public class OperationsLoader {
             if (ops.size() == 2) {
                 cond = checkCondition(r, (String) ops.get(0).get("name"));
             }
-            int off = getImmediateByte(r, m);
-            if (cond)
+            int off = getImmediateByte(r, m); // M2: read offset
+            if (cond) {
+                // M3: internal M-cycle for PC adjustment
+                if (cpu != null)
+                    cpu.tickInternalMcycle();
                 r.setPC(r.getPC() + (byte) off);
+            }
             if (cpu != null)
                 cpu.setLastConditionTaken(cond && ops.size() == 2);
         };
@@ -809,11 +1037,16 @@ public class OperationsLoader {
                 cond = checkCondition(r, (String) ops.get(0).get("name"));
                 idx = 1;
             }
-            int addr = readMemoryOrRegister(r, m, ops.get(idx)); // advances PC
+            int addr = readMemoryOrRegister(r, m, ops.get(idx)); // reads a16 (2 M-cycles)
             if (cond) {
+                // M4: internal cycle between operand read and stack push
+                if (cpu != null)
+                    cpu.tickInternalMcycle();
                 int ret = r.getPC();
                 r.setSP(r.getSP() - 2);
-                m.writeChar(r.getSP(), ret);
+                // Stack push: high byte first, then low byte (hardware order)
+                m.writeByte(r.getSP() + 1, (ret >> 8) & 0xFF); // M5: push high
+                m.writeByte(r.getSP(), ret & 0xFF); // M6: push low
                 r.setPC(addr);
             }
             if (cpu != null)
@@ -824,26 +1057,36 @@ public class OperationsLoader {
     private OperationExecutor createRetExecutor() {
         return (r, m, ops) -> {
             boolean cond = true;
-            if (ops.size() == 1) {
+            boolean isConditional = ops.size() == 1;
+            if (isConditional) {
                 cond = checkCondition(r, (String) ops.get(0).get("name"));
+                // RET cc: internal M-cycle after condition check (before stack read)
+                if (cpu != null)
+                    cpu.tickInternalMcycle();
             }
             if (cond) {
-                int ret = m.readChar(r.getSP());
+                int ret = m.readChar(r.getSP()); // M2-M3 (or M3-M4 for cc): read return address
                 r.setSP(r.getSP() + 2);
                 r.setPC(ret);
+                // Internal M-cycle after stack read (set new PC)
+                if (cpu != null)
+                    cpu.tickInternalMcycle();
             }
             if (cpu != null)
-                cpu.setLastConditionTaken(cond && ops.size() == 1);
+                cpu.setLastConditionTaken(cond && isConditional);
         };
     }
 
     private OperationExecutor createRetiExecutor() {
         return (r, m, ops) -> {
-            int ret = m.readChar(r.getSP());
+            int ret = m.readChar(r.getSP()); // M2-M3: read return address
             r.setSP(r.getSP() + 2);
             r.setPC(ret);
-            if (cpu != null)
+            // M4: internal M-cycle after stack read
+            if (cpu != null) {
+                cpu.tickInternalMcycle();
                 cpu.setIme(true); // RETI enables immediately
+            }
         };
     }
 
@@ -854,8 +1097,13 @@ public class OperationsLoader {
             String s = (String) ops.get(0).get("name"); // e.g., "08H"
             int addr = Integer.parseInt(s.substring(0, s.length() - 1), 16);
             int ret = r.getPC();
+            // M2: internal M-cycle before stack push
+            if (cpu != null)
+                cpu.tickInternalMcycle();
             r.setSP(r.getSP() - 2);
-            m.writeChar(r.getSP(), ret);
+            // Stack push: high byte first, then low byte (hardware order)
+            m.writeByte(r.getSP() + 1, (ret >> 8) & 0xFF); // M3: push high
+            m.writeByte(r.getSP(), ret & 0xFF); // M4: push low
             r.setPC(addr);
         };
     }
@@ -1100,7 +1348,8 @@ public class OperationsLoader {
 
     private OperationExecutor createPushExecutor() {
         return (r, m, ops) -> {
-            if (ops.size() != 1) return;
+            if (ops.size() != 1)
+                return;
             Map<String, Object> src = ops.get(0);
             String name = (String) src.get("name");
 
@@ -1112,14 +1361,20 @@ public class OperationsLoader {
                 default -> 0;
             };
 
+            // M2: internal M-cycle before stack write
+            if (cpu != null)
+                cpu.tickInternalMcycle();
             r.setSP(r.getSP() - 2);
-            m.writeChar(r.getSP(), value);
+            // Stack push: high byte first, then low byte (hardware order)
+            m.writeByte(r.getSP() + 1, (value >> 8) & 0xFF); // M3: push high
+            m.writeByte(r.getSP(), value & 0xFF); // M4: push low
         };
     }
 
     private OperationExecutor createPopExecutor() {
         return (r, m, ops) -> {
-            if (ops.size() != 1) return;
+            if (ops.size() != 1)
+                return;
             Map<String, Object> dest = ops.get(0);
             String name = (String) dest.get("name");
 

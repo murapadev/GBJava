@@ -5,6 +5,7 @@ package gbc.model.sound;
  * Plays 4-bit samples from wave RAM with volume control
  */
 public class WaveChannel {
+    // TODO: Emulate wave RAM access restrictions and CGB/DMG playback differences.
     private final int[] wavePattern = new int[16]; // 32 4-bit samples (16 bytes)
     private final float[] samples = new float[2];
     private int frequencyTimer;
@@ -16,6 +17,8 @@ public class WaveChannel {
     private boolean enabled;
     private int outputLevel;
     private int volumeShift;
+    // Cached current sample
+    private float currentSample;
 
     public float[] step(boolean stepLength) {
         // Step timing systems
@@ -47,7 +50,41 @@ public class WaveChannel {
         return samples;
     }
 
-    private void stepLength() {
+    /** Batch step frequency timer by multiple cycles */
+    public void stepCycles(int cycles) {
+        if (!dacOn || !enabled) {
+            currentSample = 0f;
+            return;
+        }
+
+        int period = (2048 - frequency) * 2;
+        if (period <= 0)
+            period = 1;
+
+        frequencyTimer -= cycles;
+        while (frequencyTimer <= 0) {
+            frequencyTimer += period;
+            dutyPosition = (dutyPosition + 1) & 31;
+        }
+
+        // Update cached sample
+        int sampleIndex = dutyPosition / 2;
+        int nibble = wavePattern[sampleIndex];
+        if ((dutyPosition & 1) != 0) {
+            nibble &= 0x0F;
+        } else {
+            nibble >>>= 4;
+        }
+        currentSample = (nibble >>> volumeShift) / 15f;
+    }
+
+    /** Get current sample value */
+    public float getCurrentSample() {
+        return currentSample;
+    }
+
+    /** Step length counter (called by frame sequencer) */
+    public void stepLength() {
         if (lengthEnabled && lengthCounter > 0) {
             lengthCounter--;
             if (lengthCounter == 0) {
@@ -136,6 +173,8 @@ public class WaveChannel {
             boolean trigger = (value >>> 7) != 0;
             if (trigger && dacOn) {
                 enabled = true;
+                dutyPosition = 0;
+                frequencyTimer = (2048 - frequency) * 2;
             }
             return;
         }

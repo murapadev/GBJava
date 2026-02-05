@@ -8,6 +8,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public abstract class Cartridge {
+    // TODO: Add header validation (logo/checksum) and RTC/battery-backed persistence hooks.
     private static final Logger LOGGER = Logger.getLogger(Cartridge.class.getName());
     
     protected byte[] data;
@@ -87,6 +88,10 @@ public abstract class Cartridge {
      */
     public void setRomPath(String path) {
         this.romPath = Paths.get(path);
+    }
+
+    public Path getRomPath() {
+        return romPath;
     }
     
     /**

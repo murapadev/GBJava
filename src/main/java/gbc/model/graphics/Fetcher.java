@@ -32,6 +32,10 @@ public class Fetcher {
     private int tileLine;
     private int tileId;
     private TileAttributes tileAttributes;
+    private boolean useScx;
+    private boolean useScy;
+    private int scxLatch;
+    private boolean scxLatched;
 
     private int tileData1;
     private int tileData2;
@@ -52,6 +56,7 @@ public class Fetcher {
     private int spriteOamIndex;
 
     private final int[] pixelLine = new int[8];
+    private int tickCounter;
 
     public Fetcher(PixelFifo fifo, Memory memory) {
         this.fifo = fifo;
@@ -63,6 +68,8 @@ public class Fetcher {
         this.state = State.READ_TILE_ID;
         this.fetchingDisabled = false;
         this.hasSavedBgState = false;
+        this.tickCounter = 0;
+        this.scxLatched = false;
     }
 
     public void reset() {
@@ -74,22 +81,37 @@ public class Fetcher {
         int bgMap = (lcdc & 0x08) == 0 ? 0x9800 : 0x9C00;
         int tileData = (lcdc & 0x10) == 0 ? 0x9000 : 0x8000;
         boolean signed = (lcdc & 0x10) == 0;
-        int scx = memory.getScx();
         int scy = memory.getScy();
         int y = (currentLine + scy) & 0xFF;
 
-        startFetching(bgMap, tileData, (scx / 8), signed, y);
+        startFetching(bgMap, tileData, 0, signed, y, true, true);
     }
 
     public void startFetching(int mapAddress, int tileDataAddress, int xOffset,
             boolean tileIdSigned, int tileLine) {
+        startFetching(mapAddress, tileDataAddress, xOffset, tileIdSigned, tileLine, true, true);
+    }
+
+    public void startFetching(int mapAddress, int tileDataAddress, int xOffset,
+            boolean tileIdSigned, int tileLine, boolean useScx, boolean useScy) {
         this.mapAddress = mapAddress;
         this.tileDataAddress = tileDataAddress;
         this.xOffset = xOffset;
         this.tileIdSigned = tileIdSigned;
         this.tileLine = tileLine;
+        this.useScx = useScx;
+        this.useScy = useScy;
         this.state = State.READ_TILE_ID;
         this.fetchingDisabled = false;
+        if (useScx && !scxLatched) {
+            scxLatch = memory.getScx() & 0xFF;
+            scxLatched = true;
+        }
+    }
+
+    public void setScxLatch(int scx) {
+        this.scxLatch = scx & 0xFF;
+        this.scxLatched = true;
     }
 
     public void tick() {
@@ -97,9 +119,19 @@ public class Fetcher {
             return;
         }
 
+        // Hardware fetcher advances 1 step every 2 T-cycles
+        // TODO: Confirm fetcher phase timing when sprites are injected mid-tile.
+        tickCounter++;
+        if (tickCounter < 2) {
+            return;
+        }
+        tickCounter = 0;
+
         switch (state) {
             case READ_TILE_ID -> {
-                int mapIndex = ((tileLine / 8) * 32) + xOffset;
+                int effectiveTileLine = useScy ? ((memory.getLy() + memory.getScy()) & 0xFF) : tileLine;
+                int baseX = useScx ? ((scxLatch & 0xF8) >> 3) : 0;
+                int mapIndex = ((effectiveTileLine / 8) * 32) + ((baseX + xOffset) & 0x1F);
                 int mapAddr = mapAddress + mapIndex;
                 if (memory.isCgbMode()) {
                     tileId = memory.getVramByteBanked(mapAddr, 0) & 0xFF;
@@ -113,8 +145,9 @@ public class Fetcher {
             }
 
             case READ_TILE_DATA_1 -> {
+                int effectiveTileLine = useScy ? ((memory.getLy() + memory.getScy()) & 0xFF) : tileLine;
                 int tileAddr = tileDataAddress + (tileIdSigned ? (byte) tileId * 16 : tileId * 16);
-                int line = tileLine % 8;
+                int line = effectiveTileLine % 8;
                 if (tileAttributes != null && tileAttributes.isYflip()) {
                     line = 7 - line;
                 }
@@ -124,8 +157,9 @@ public class Fetcher {
             }
 
             case READ_TILE_DATA_2 -> {
+                int effectiveTileLine = useScy ? ((memory.getLy() + memory.getScy()) & 0xFF) : tileLine;
                 int tileAddr = tileDataAddress + (tileIdSigned ? (byte) tileId * 16 : tileId * 16);
-                int line = tileLine % 8;
+                int line = effectiveTileLine % 8;
                 if (tileAttributes != null && tileAttributes.isYflip()) {
                     line = 7 - line;
                 }
@@ -202,8 +236,11 @@ public class Fetcher {
 
             case PUSH_SPRITE -> {
                 // Convert sprite tile data to pixels and overlay on FIFO
-                zip(tileData1, tileData2, spriteAttributes.isXflip(), pixelLine);
-                fifo.setOverlay(pixelLine, spriteOffset, spriteAttributes, spriteOamIndex);
+                // Keep sprite pixel data in tile order; FIFO handles X-flip when applying
+                // offset.
+                zip(tileData1, tileData2, false, pixelLine);
+                fifo.setOverlay(pixelLine, spriteOffset, spriteAttributes, spriteOamIndex, sprite.getX());
+                // TODO: Account for sprite fetch timing penalties before resuming BG fetch.
                 if (hasSavedBgState) {
                     state = savedBgState;
                     tileId = savedTileId;
@@ -235,6 +272,8 @@ public class Fetcher {
         this.spriteOffset = offset;
         this.spriteOamIndex = oamIndex;
 
+        // TODO: Sprite fetch should respect hardware timing constraints (one sprite per
+        // 8 dots; OAM order).
         if (!hasSavedBgState && isBgState(state)) {
             savedBgState = state;
             savedTileId = tileId;
@@ -291,12 +330,25 @@ public class Fetcher {
      * @param pixelLine output array for 8 pixels
      */
     public static void zip(int data1, int data2, boolean reverse, int[] pixelLine) {
-        for (int i = 0; i < 8; i++) {
-            int bit = reverse ? i : (7 - i);
-            int mask = (1 << bit);
-            int lo = (data1 & mask) == 0 ? 0 : 1;
-            int hi = (data2 & mask) == 0 ? 0 : 1;
-            pixelLine[i] = (hi << 1) | lo;
+        // Optimized bit extraction using shifts instead of masks
+        if (reverse) {
+            pixelLine[0] = ((data2 & 0x01) << 1) | (data1 & 0x01);
+            pixelLine[1] = ((data2 & 0x02) >> 0) | ((data1 & 0x02) >> 1);
+            pixelLine[2] = ((data2 & 0x04) >> 1) | ((data1 & 0x04) >> 2);
+            pixelLine[3] = ((data2 & 0x08) >> 2) | ((data1 & 0x08) >> 3);
+            pixelLine[4] = ((data2 & 0x10) >> 3) | ((data1 & 0x10) >> 4);
+            pixelLine[5] = ((data2 & 0x20) >> 4) | ((data1 & 0x20) >> 5);
+            pixelLine[6] = ((data2 & 0x40) >> 5) | ((data1 & 0x40) >> 6);
+            pixelLine[7] = ((data2 & 0x80) >> 6) | ((data1 & 0x80) >> 7);
+        } else {
+            pixelLine[0] = ((data2 & 0x80) >> 6) | ((data1 & 0x80) >> 7);
+            pixelLine[1] = ((data2 & 0x40) >> 5) | ((data1 & 0x40) >> 6);
+            pixelLine[2] = ((data2 & 0x20) >> 4) | ((data1 & 0x20) >> 5);
+            pixelLine[3] = ((data2 & 0x10) >> 3) | ((data1 & 0x10) >> 4);
+            pixelLine[4] = ((data2 & 0x08) >> 2) | ((data1 & 0x08) >> 3);
+            pixelLine[5] = ((data2 & 0x04) >> 1) | ((data1 & 0x04) >> 2);
+            pixelLine[6] = ((data2 & 0x02) >> 0) | ((data1 & 0x02) >> 1);
+            pixelLine[7] = ((data2 & 0x01) << 1) | (data1 & 0x01);
         }
     }
 }

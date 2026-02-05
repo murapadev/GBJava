@@ -4,6 +4,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class CartridgeFactory {
+    // TODO: Support additional MBCs (MMM01/MBC7/HuC*) and validate headers.
 
     private static final Logger LOGGER = Logger.getLogger(CartridgeFactory.class.getName());
 
