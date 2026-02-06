@@ -5,8 +5,6 @@ package gbc.model.sound;
  * Handles volume ramping up/down over time
  */
 public class VolumeEnvelope {
-    // TODO: Match envelope timing when period=0 and trigger behavior across
-    // channels.
     private int period;
     private int periodTimer;
     private int volume;
@@ -18,20 +16,22 @@ public class VolumeEnvelope {
         this.registerAddress = registerAddress;
     }
 
-    public void step() {
-        if (period != 0) {
-            if (periodTimer > 0) {
-                periodTimer--;
-            }
+    private int getEffectivePeriod() {
+        return period == 0 ? 8 : period;
+    }
 
-            if (periodTimer == 0) {
-                periodTimer = period;
-                if (volume < 0xF && upwards || volume > 0x0 && !upwards) {
-                    if (upwards) {
-                        volume++;
-                    } else {
-                        volume--;
-                    }
+    public void step() {
+        if (periodTimer > 0) {
+            periodTimer--;
+        }
+
+        if (periodTimer == 0) {
+            periodTimer = getEffectivePeriod();
+            if (volume < 0xF && upwards || volume > 0x0 && !upwards) {
+                if (upwards) {
+                    volume++;
+                } else {
+                    volume--;
                 }
             }
         }
@@ -52,7 +52,7 @@ public class VolumeEnvelope {
         // Reset volume to the value latched in NRx2.
         volume = (registerValue >>> 4) & 0xF;
         period = registerValue & 0x7;
-        periodTimer = period;
+        periodTimer = getEffectivePeriod();
         upwards = (registerValue & 0x08) != 0;
     }
 
@@ -77,7 +77,7 @@ public class VolumeEnvelope {
             upwards = (registerValue & 0x08) != 0;
             period = registerValue & 0x07;
             volume = (registerValue >>> 4) & 0x0F;
-            periodTimer = period;
+            periodTimer = getEffectivePeriod();
         } else {
             throw new RuntimeException("Invalid address");
         }

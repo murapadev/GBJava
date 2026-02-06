@@ -176,7 +176,8 @@ public class PixelTransfer {
 
     private void startFetchingBackground() {
         int lcdc = memory.getLcdc();
-        // DMG: bit 0 disables BG. CGB: BG is always enabled; bit 0 only affects priority.
+        // DMG: bit 0 disables BG. CGB: BG is always enabled; bit 0 only affects
+        // priority.
         boolean bgEnabled = memory.isCgbMode() || (lcdc & 0x01) != 0;
 
         if (!bgEnabled) {
@@ -235,10 +236,10 @@ public class PixelTransfer {
         if (windowStartX >= 160) {
             return false;
         }
-        // TODO: Verify window trigger rules (WX/WY edge cases and mid-line behavior).
+        // Window starts as soon as the current screen X is at or beyond WX-7
+        // (evaluated every dot so mid-line WX writes can trigger the window).
         return x >= windowStartX;
     }
-
 
     public void reset() {
         this.x = 0;

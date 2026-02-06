@@ -9,7 +9,6 @@ import java.util.logging.Logger;
 import javax.swing.JPanel;
 
 public class Screen extends JPanel {
-    // TODO: Avoid mutating input buffers in render and support scaling/color correction externally.
     private static final Logger LOGGER = Logger.getLogger(Screen.class.getName());
     private static final int WIDTH = 160; // Game Boy screen width
     private static final int HEIGHT = 144; // Game Boy screen height
@@ -17,13 +16,20 @@ public class Screen extends JPanel {
     private BufferedImage backBuffer;
     private volatile BufferedImage frontBuffer;
     private volatile long frameId;
+    private final int[] renderBuffer; // Owned buffer for color conversion — never mutates input
 
     public Screen() {
         this.backBuffer = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
         this.frontBuffer = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        this.renderBuffer = new int[WIDTH * HEIGHT];
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
     }
 
+    /**
+     * Renders a frame from a pixel array without mutating the input.
+     * Color conversion is performed into an internal buffer.
+     * Scaling and color correction can be applied externally before calling this.
+     */
     public void render(int[] frameBuffer) {
         if (frameBuffer.length != WIDTH * HEIGHT) {
             LOGGER.log(Level.WARNING, () -> String.format("Invalid frame buffer size: %d, expected: %d",
@@ -31,12 +37,12 @@ public class Screen extends JPanel {
             return;
         }
 
-        // Convert Game Boy colors to RGB
+        // Convert into owned buffer — input array is never modified
         for (int i = 0; i < frameBuffer.length; i++) {
-            frameBuffer[i] = convertGBColor(frameBuffer[i]);
+            renderBuffer[i] = convertGBColor(frameBuffer[i]);
         }
 
-        backBuffer.setRGB(0, 0, WIDTH, HEIGHT, frameBuffer, 0, WIDTH);
+        backBuffer.setRGB(0, 0, WIDTH, HEIGHT, renderBuffer, 0, WIDTH);
         swapBuffers();
     }
 

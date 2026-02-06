@@ -5,9 +5,19 @@ import java.util.logging.Logger;
 
 import gbc.model.memory.Memory;
 
+/**
+ * Pixel Processing Unit for Game Boy / Game Boy Color.
+ *
+ * <p>Architecture: Uses a FIFO-based pixel pipeline with separate
+ * DMG ({@link DmgPixelFifo}) and CGB ({@link CgbPixelFifo}) renderers.
+ * The pipeline is rebuilt when CGB mode changes via {@link #rebuildPipeline()}.
+ *
+ * <p>Mode 3 timing is dynamically calculated per-scanline based on SCX
+ * fine-scroll penalty, window activation, and per-sprite fetch penalties.
+ * The {@link Fetcher} handles sprite fetch timing constraints including
+ * a 6-dot minimum penalty per sprite and proper BG fetch state save/restore.
+ */
 public class PPU {
-    // TODO: Move to dot-accurate pipeline and separate DMG/CGB renderers for
-    // priority/attribute quirks.
     private static final Logger LOGGER = Logger.getLogger(PPU.class.getName());
     private static final boolean PPU_TRACE = Boolean.getBoolean("gbc.ppu.trace");
     private Memory memory;

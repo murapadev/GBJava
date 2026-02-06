@@ -1,7 +1,6 @@
 package gbc.model.cartridge;
 
 public class MBC5 extends Cartridge {
-	// TODO: Add rumble support and validate RAM bank masking for large RAM sizes.
 	private static final int ROM_BANK_SIZE = 0x4000; // Size of a ROM bank
 	private static final int RAM_BANK_SIZE = 0x2000; // Size of a RAM bank
 
@@ -10,10 +9,17 @@ public class MBC5 extends Cartridge {
 	private boolean ramEnabled;
 	private final int romBankCount;
 	private final int ramBankCount;
+	private final boolean hasRumble;
+	private boolean rumbleEnabled;
 
 	public MBC5(byte[] data, boolean hasBattery) {
+		this(data, hasBattery, false);
+	}
+
+	public MBC5(byte[] data, boolean hasBattery, boolean hasRumble) {
 		super(data);
 		this.hasBattery = hasBattery;
+		this.hasRumble = hasRumble;
 		this.romBankNumber = 1; // Default to bank 1, as bank 0 is always mapped to 0x0000-0x3FFF
 		this.ramBankNumber = 0;
 		this.ramEnabled = false;
@@ -35,6 +41,8 @@ public class MBC5 extends Cartridge {
 				return 32 * 1024; // 32KB
 			case 0x04:
 				return 128 * 1024; // 128KB
+			case 0x05:
+				return 64 * 1024; // 64KB
 			default:
 				return 0;
 		}
@@ -78,7 +86,12 @@ public class MBC5 extends Cartridge {
 			romBankNumber = (romBankNumber & 0xFF) | ((value & 0x01) << 8);
 		} else if (address >= 0x4000 && address < 0x6000) {
 			// Select RAM bank
-			ramBankNumber = value & 0x0F;
+			if (hasRumble) {
+				rumbleEnabled = (value & 0x08) != 0;
+				ramBankNumber = value & 0x07;
+			} else {
+				ramBankNumber = value & 0x0F;
+			}
 		} else if (address >= 0xA000 && address < 0xC000 && ramEnabled) {
 			if (ram == null || ramBankCount == 0) {
 				return;
@@ -107,6 +120,10 @@ public class MBC5 extends Cartridge {
 		}
 		int bank = ramBankNumber % ramBankCount;
 		return Math.max(0, bank);
+	}
+
+	public boolean isRumbleEnabled() {
+		return rumbleEnabled;
 	}
 
 	private byte safeRomRead(int index) {

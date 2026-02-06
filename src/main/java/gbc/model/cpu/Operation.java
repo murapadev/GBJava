@@ -1,12 +1,11 @@
 package gbc.model.cpu;
 
-import gbc.model.memory.Memory;
-
 import java.util.List;
 import java.util.Map;
 
+import gbc.model.memory.Memory;
+
 public class Operation {
-    // TODO: Enforce non-null executor/operand metadata for all defined opcodes.
     private OperationExecutor executor;
     private String mnemonic;
     private int bytes;
@@ -20,7 +19,8 @@ public class Operation {
         // Default constructor for reflective creation
     }
 
-    public Operation(OperationExecutor executor, String mnemonic, int bytes, List<Integer> cycles, boolean immediate, Map<String, String> flags, List<Map<String, Object>> operands) {
+    public Operation(OperationExecutor executor, String mnemonic, int bytes, List<Integer> cycles, boolean immediate,
+            Map<String, String> flags, List<Map<String, Object>> operands) {
         this.executor = executor;
         this.mnemonic = mnemonic;
         this.bytes = bytes;
@@ -31,13 +31,18 @@ public class Operation {
     }
 
     public void perform(Registers registers, Memory memory) {
-        executor.execute(registers, memory, operands);
+        perform(registers, memory, null);
+    }
+
+    public void perform(Registers registers, Memory memory, CPU cpu) {
+        if (executor == null) {
+            throw new IllegalStateException("Operation executor missing for " + mnemonic);
+        }
+        OperationExecutor.ExecutionContext context = new OperationExecutor.ExecutionContext(registers, memory, cpu);
+        executor.execute(context, operands);
     }
 
     // getters and setters for the new fields...
-
-
-
 
     public OperationExecutor getExecutor() {
         return executor;

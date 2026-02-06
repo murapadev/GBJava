@@ -1,18 +1,20 @@
 package gbc.model.graphics;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * Double-buffered pixel storage for the Game Boy screen.
  * Thread-safe: the emulation thread writes to the back buffer,
  * and the EDT reads from the front buffer via {@link #getPixels()}.
+ * Uses {@link AtomicReference} for lock-free buffer swaps.
  */
 public class FrameBuffer {
-    // TODO: Consider atomic swaps for strict thread-safety guarantees.
     public static final int WIDTH = 160;
     public static final int HEIGHT = 144;
     private static final int SIZE = WIDTH * HEIGHT;
 
     private int[] backBuffer = new int[SIZE];
-    private volatile int[] frontBuffer = new int[SIZE];
+    private final AtomicReference<int[]> frontBufferRef = new AtomicReference<>(new int[SIZE]);
     private volatile long frameId;
 
     /**
@@ -40,22 +42,22 @@ public class FrameBuffer {
     }
 
     /**
-     * Swaps back and front buffers. Called once per VBlank.
+     * Swaps back and front buffers atomically. Called once per VBlank.
+     * The old front buffer becomes the new back buffer.
      */
     public void swapBuffers() {
-        int[] temp = frontBuffer;
-        frontBuffer = backBuffer;
-        backBuffer = temp;
+        int[] oldFront = frontBufferRef.getAndSet(backBuffer);
+        backBuffer = oldFront;
         frameId++;
     }
 
     /**
      * Returns the front buffer pixels for display.
      * Safe to call from the EDT while the emulation thread writes to the back
-     * buffer.
+     * buffer. The returned array reference is stable until the next swap.
      */
     public int[] getPixels() {
-        return frontBuffer;
+        return frontBufferRef.get();
     }
 
     public long getFrameId() {
@@ -64,7 +66,8 @@ public class FrameBuffer {
 
     public void clear() {
         java.util.Arrays.fill(backBuffer, 0);
-        java.util.Arrays.fill(frontBuffer, 0);
+        int[] front = frontBufferRef.get();
+        java.util.Arrays.fill(front, 0);
         frameId++;
     }
 

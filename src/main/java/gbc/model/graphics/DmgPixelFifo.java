@@ -4,7 +4,15 @@ import gbc.model.memory.Memory;
 
 /**
  * Pixel FIFO implementation for original Game Boy (DMG).
- * Uses separate queues for pixel data and palette information.
+ *
+ * <p>DMG sprite priority rules:
+ * <ul>
+ *   <li>Transparent sprite pixels (color 0) never override BG</li>
+ *   <li>When BG color is 0, sprite always shows (regardless of priority bit)</li>
+ *   <li>When BG color is non-zero and sprite OAM priority bit is set, BG wins</li>
+ *   <li>Among overlapping sprites: lower X position wins, ties break by lower OAM index</li>
+ *   <li>Priority key = (spriteX << 8) | oamIndex ensures correct ordering</li>
+ * </ul>
  */
 public class DmgPixelFifo implements PixelFifo {
     private final IntQueue bgPixels = new IntQueue(16);
@@ -49,16 +57,19 @@ public class DmgPixelFifo implements PixelFifo {
     }
 
     private int resolveColor(int bgPixel, int bgPalette, int objPixel, int objPalette, int objPaletteIndex, int objBehind) {
+        // Sprite pixel is transparent → show BG
         if (objPixel == 0) {
             return getDmgColor(bgPixel, bgPalette, false, 0);
         }
+        // BG color 0 is always transparent to sprites on DMG
         if (bgPixel == 0) {
             return getDmgColor(objPixel, objPalette, true, objPaletteIndex);
         }
+        // OAM priority bit set (behind BG) and BG is non-zero → show BG
         if (objBehind != 0) {
             return getDmgColor(bgPixel, bgPalette, false, 0);
         }
-        // TODO: Verify DMG sprite priority rules for overlapping sprites and BG color 0 edge cases.
+        // Sprite wins over non-zero BG when priority bit is clear
         return getDmgColor(objPixel, objPalette, true, objPaletteIndex);
     }
 
@@ -130,7 +141,9 @@ public class DmgPixelFifo implements PixelFifo {
         int paletteIndex = spriteAttributes.getDmgObjPaletteIndex();
         int overlayPalette = paletteIndex != 0 ? memory.getObp1() : memory.getObp0(); // Bit 4: 0=OBP0, 1=OBP1
         int priorityKey = (spriteX << 8) | (oamIndex & 0xFF);
-        // TODO: Consider OAM search ordering vs X sorting for DMG sprite conflicts.
+        // DMG sprite conflict resolution: lower X wins, ties broken by lower OAM index.
+        // The priorityKey encoding (X in high bits, OAM in low bits) ensures this
+        // ordering naturally via integer comparison.
 
         int fifoSize = bgPixels.size();
         for (int screenIndex = 0; screenIndex < 8; screenIndex++) {

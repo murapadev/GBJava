@@ -5,7 +5,6 @@ package gbc.model.sound;
  * Plays 4-bit samples from wave RAM with volume control
  */
 public class WaveChannel {
-    // TODO: Emulate wave RAM access restrictions and CGB/DMG playback differences.
     private final int[] wavePattern = new int[16]; // 32 4-bit samples (16 bytes)
     private final float[] samples = new float[2];
     private int frequencyTimer;
@@ -17,8 +16,23 @@ public class WaveChannel {
     private boolean enabled;
     private int outputLevel;
     private int volumeShift;
+    private boolean cgbMode;
     // Cached current sample
     private float currentSample;
+    // Frame sequencer step (0-7), updated by APU
+    private int frameSequencerStep;
+
+    public void setCgbMode(boolean cgbMode) {
+        this.cgbMode = cgbMode;
+    }
+
+    private int resolveWaveRamIndex(int address) {
+        int index = address - 0xFF30;
+        if (!cgbMode && enabled && dacOn) {
+            return (dutyPosition / 2) & 0x0F;
+        }
+        return index & 0x0F;
+    }
 
     public float[] step(boolean stepLength) {
         // Step timing systems
@@ -93,6 +107,14 @@ public class WaveChannel {
         }
     }
 
+    /**
+     * Update the frame sequencer step, called by APU each frame sequencer tick.
+     * Used for length counter extra-clocking quirk on NR34 writes.
+     */
+    public void setFrameSequencerStep(int step) {
+        this.frameSequencerStep = step;
+    }
+
     public void setDutyPosition(int value) {
         dutyPosition = value;
     }
@@ -124,7 +146,7 @@ public class WaveChannel {
             return (lengthEnabled ? 1 : 0) << 6 | 0b1011_1111;
         }
         if (address >= 0xFF30 && address < 0xFF40) {
-            return wavePattern[address - 0xFF30];
+            return wavePattern[resolveWaveRamIndex(address)];
         }
 
         throw new RuntimeException("Invalid address: " + Integer.toHexString(address));
@@ -166,20 +188,36 @@ public class WaveChannel {
         }
         if (address == 0xFF1E) {
             frequency = (frequency & 0xFF) | ((value & 0x7) << 8);
+            boolean wasLengthEnabled = lengthEnabled;
             lengthEnabled = (value >>> 6 & 0b1) != 0;
-            if (lengthCounter == 0) {
-                lengthCounter = 256;
-            }
             boolean trigger = (value >>> 7) != 0;
-            if (trigger && dacOn) {
-                enabled = true;
-                dutyPosition = 0;
-                frequencyTimer = (2048 - frequency) * 2;
+
+            // Extra length clocking quirk
+            boolean onNonLengthStep = (frameSequencerStep & 1) != 0;
+            if (!wasLengthEnabled && lengthEnabled && onNonLengthStep && lengthCounter > 0) {
+                lengthCounter--;
+                if (lengthCounter == 0 && !trigger) {
+                    enabled = false;
+                }
+            }
+
+            if (trigger) {
+                if (lengthCounter == 0) {
+                    lengthCounter = 256;
+                    if (lengthEnabled && onNonLengthStep) {
+                        lengthCounter--;
+                    }
+                }
+                if (dacOn) {
+                    enabled = true;
+                    dutyPosition = 0;
+                    frequencyTimer = (2048 - frequency) * 2;
+                }
             }
             return;
         }
         if (address >= 0xFF30 && address < 0xFF40) {
-            wavePattern[address - 0xFF30] = value;
+            wavePattern[resolveWaveRamIndex(address)] = value & 0xFF;
             return;
         }
 

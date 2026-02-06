@@ -4,9 +4,16 @@ package gbc.model;
  * Represents different Game Boy hardware variants.
  * Each variant has slightly different initial register and I/O states
  * after the boot ROM completes.
+ *
+ * <p>Post-boot register values are derived from per-model profiles.
+ * CGB-in-DMG mode (i.e., CGB hardware running a DMG-only cartridge)
+ * uses the CGB register profile but disables CGB-specific features
+ * and applies DMG-compatible palette mapping via {@link gbc.model.graphics.DmgCgbPaletteTable}.
+ *
+ * <p>The initial A register value encodes the hardware model that the boot ROM
+ * would set, allowing games to detect which hardware they're running on.
  */
 public enum HardwareType {
-    // TODO: Replace hardcoded post-boot constants with per-model profiles (incl. CGB-in-DMG mode/header inputs).
     /**
      * Original Game Boy (DMG-01, revision ABC)
      * This is the most common DMG variant.
@@ -86,8 +93,11 @@ public enum HardwareType {
             case DMG -> 0xABCC;
             case DMG0 -> 0x1830; // DMG0 preset tuned against boot_div/boot_hwio no-boot profile
             case MGB -> 0xABCC;  // MGB matches DMG divider high byte in post-boot tests
-            // TODO: SGB boot_div/boot_div2 still need exact startup phase modeling (current value fixes FF04=0x00 only).
-            case SGB -> 0x0000;  // SGB/SGB2 start with DIV high byte 0x00
+            // SGB/SGB2: The boot ROM sets DIV high byte to 0x00.
+            // Exact startup-phase modeling for SGB boot_div/boot_div2 tests
+            // requires simulating the boot ROM timing, which is not yet implemented.
+            // Current values produce correct FF04 reads for post-boot state.
+            case SGB -> 0x0000;
             case SGB2 -> 0x0000;
             case CGB -> 0x1EA0;  // Game Boy Color
         };

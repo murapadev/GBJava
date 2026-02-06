@@ -16,12 +16,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import gbc.controller.io.RomLoader;
 import gbc.model.GameBoyColor;
 import gbc.model.HardwareType;
-import gbc.model.cpu.Registers;
-import gbc.model.memory.Memory;
-import gbc.controller.io.RomLoader;
 import gbc.model.cartridge.Cartridge;
+import gbc.model.memory.Memory;
 
 /**
  * Test harness for Blargg's Game Boy test ROMs.
@@ -141,7 +140,8 @@ class BlarggTest {
                 Paths.get("samples", "roms", "blargg"),
         };
         for (Path p : candidates) {
-            if (Files.isDirectory(p)) return p;
+            if (Files.isDirectory(p))
+                return p;
         }
         return Paths.get("samples", "roms", "blargg", "gb-test-roms-master");
     }
@@ -228,7 +228,8 @@ class BlarggTest {
     }
 
     private String extractWramText(Memory memory) {
-        // Scan WRAM (0xC000-0xDFFF) for printable ASCII text containing "Passed" or "Failed"
+        // Scan WRAM (0xC000-0xDFFF) for printable ASCII text containing "Passed" or
+        // "Failed"
         StringBuilder sb = new StringBuilder();
         for (int addr = 0xC000; addr <= 0xDFFF; addr++) {
             int b = memory.readByte(addr) & 0xFF;
@@ -243,5 +244,6 @@ class BlarggTest {
         return sb.toString().trim();
     }
 
-    private record BlarggResult(long cycles, long instructions, String serialOutput, String wramText) {}
+    private record BlarggResult(long cycles, long instructions, String serialOutput, String wramText) {
+    }
 }

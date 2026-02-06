@@ -335,7 +335,6 @@ public class VRAMViewer extends JFrame {
 
     // Palette View Panel
     private class PaletteViewPanel extends JPanel {
-        // TODO: Add CGB BG/OBJ palette RAM visualization (8 palettes x 4 colors).
         public PaletteViewPanel() {
             setBackground(Color.WHITE);
         }
@@ -348,14 +347,22 @@ public class VRAMViewer extends JFrame {
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
 
+            g.setColor(Color.BLACK);
+            g.setFont(new Font("Monospaced", Font.BOLD, 14));
+
+            if (memory.isCgbMode()) {
+                paintCgbPalettes(g);
+            } else {
+                paintDmgPalettes(g);
+            }
+        }
+
+        private void paintDmgPalettes(Graphics g) {
             // Background Palette
             int bgp = memory.readByte(0xFF47) & 0xFF;
             Color[] bgPalette = extractPalette(bgp);
 
-            g.setColor(Color.BLACK);
-            g.setFont(new Font("Monospaced", Font.BOLD, 14));
             g.drawString("Background Palette (BGP):", 10, 25);
-
             for (int i = 0; i < 4; i++) {
                 g.setColor(bgPalette[i]);
                 g.fillRect(10 + i * 50, 35, 40, 40);
@@ -367,7 +374,6 @@ public class VRAMViewer extends JFrame {
             // Object Palettes
             int obp0 = memory.readByte(0xFF48) & 0xFF;
             int obp1 = memory.readByte(0xFF49) & 0xFF;
-
             Color[] obj0Palette = extractPalette(obp0);
             Color[] obj1Palette = extractPalette(obp1);
 
@@ -388,6 +394,61 @@ public class VRAMViewer extends JFrame {
                 g.drawRect(10 + i * 50, 245, 40, 40);
                 g.drawString(String.valueOf(i), 25 + i * 50, 305);
             }
+        }
+
+        /**
+         * Renders all 8 CGB BG palettes and 8 CGB OBJ palettes.
+         * Each palette has 4 colors (2 bytes each in 15-bit RGB555 format).
+         */
+        private void paintCgbPalettes(Graphics g) {
+            int y = 25;
+            int swatchSize = 30;
+            int gap = 5;
+
+            // CGB BG Palettes (8 palettes x 4 colors = 64 bytes at BCPS/BCPD)
+            g.setColor(Color.BLACK);
+            g.drawString("CGB BG Palettes:", 10, y);
+            y += 10;
+            for (int pal = 0; pal < 8; pal++) {
+                g.setColor(Color.BLACK);
+                g.drawString("BG" + pal, 10, y + swatchSize / 2 + 5);
+                for (int col = 0; col < 4; col++) {
+                    Color c = readCgbBgColor(pal, col);
+                    int x = 50 + col * (swatchSize + gap);
+                    g.setColor(c);
+                    g.fillRect(x, y, swatchSize, swatchSize);
+                    g.setColor(Color.DARK_GRAY);
+                    g.drawRect(x, y, swatchSize, swatchSize);
+                }
+                y += swatchSize + gap;
+            }
+
+            y += 10;
+
+            // CGB OBJ Palettes (8 palettes x 4 colors = 64 bytes at OCPS/OCPD)
+            g.setColor(Color.BLACK);
+            g.drawString("CGB OBJ Palettes:", 10, y);
+            y += 10;
+            for (int pal = 0; pal < 8; pal++) {
+                g.setColor(Color.BLACK);
+                g.drawString("OB" + pal, 10, y + swatchSize / 2 + 5);
+                for (int col = 0; col < 4; col++) {
+                    Color c = readCgbObjColor(pal, col);
+                    int x = 50 + col * (swatchSize + gap);
+                    g.setColor(c);
+                    g.fillRect(x, y, swatchSize, swatchSize);
+                    g.setColor(Color.DARK_GRAY);
+                    g.drawRect(x, y, swatchSize, swatchSize);
+                }
+                y += swatchSize + gap;
+            }
+        }
+
+        private Color readCgbObjColor(int paletteIndex, int colorIndex) {
+            int byteIndex = ((paletteIndex & 0x07) * 8) + ((colorIndex & 0x03) * 2);
+            int lo = memory.readCgbObjPaletteByte(byteIndex);
+            int hi = memory.readCgbObjPaletteByte(byteIndex + 1);
+            return convertCgbColor(lo, hi);
         }
 
         private Color[] extractPalette(int paletteData) {

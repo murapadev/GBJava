@@ -18,7 +18,7 @@ class CpuInterruptTimingTest {
         byte[] program = {
                 (byte) 0xFB, // EI
                 (byte) 0x00, // NOP
-                (byte) 0x00  // NOP
+                (byte) 0x00 // NOP
         };
 
         Memory memory = new Memory();
@@ -54,7 +54,7 @@ class CpuInterruptTimingTest {
         byte[] program = {
                 (byte) 0x76, // HALT
                 (byte) 0x04, // INC B
-                (byte) 0x00  // NOP
+                (byte) 0x00 // NOP
         };
 
         Memory memory = new Memory();
@@ -78,6 +78,28 @@ class CpuInterruptTimingTest {
         cpu.executeCycle(); // INC B again
         assertEquals(2, cpu.getRegisters().getRegister("B") & 0xFF, "INC B should execute again");
         assertEquals(0x0102, cpu.getRegisters().getPC() & 0xFFFF, "PC should resume incrementing");
+    }
+
+    @Test
+    void stopResumesWhenInterruptFlagSet() {
+        byte[] program = {
+                (byte) 0x10, (byte) 0x00, // STOP
+                (byte) 0x00 // NOP
+        };
+
+        Memory memory = new Memory();
+        memory.setHardwareType(HardwareType.DMG);
+        memory.loadCartridge(createDmgCartridge(program));
+        CPU cpu = new CPU(memory);
+        cpu.reset();
+
+        cpu.executeCycle(); // STOP
+        assertTrue(cpu.isStopped(), "CPU should enter STOP state");
+
+        memory.writeByte(0xFF0F, 0x01); // IF: VBlank pending
+        cpu.executeCycle(); // Wake and run next instruction
+        assertFalse(cpu.isStopped(), "CPU should exit STOP when IF is set");
+        assertEquals(0x0103, cpu.getRegisters().getPC() & 0xFFFF, "PC should advance after STOP + NOP");
     }
 
     private static Cartridge createDmgCartridge(byte[] program) {

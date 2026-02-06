@@ -1,6 +1,8 @@
 package gbc.acid2;
 
-import java.io.IOException;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -19,8 +21,6 @@ import gbc.model.cartridge.Cartridge;
 import gbc.model.cpu.CPU;
 import gbc.model.graphics.FrameBuffer;
 import gbc.model.memory.Memory;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Test harness for dmg-acid2 and cgb-acid2 visual test ROMs.
@@ -153,5 +153,6 @@ class Acid2Test {
         return HexFormat.of().formatHex(md.digest());
     }
 
-    private record Acid2Result(boolean completed, long cycles, long instructions, long frames, String sha256) {}
+    private record Acid2Result(boolean completed, long cycles, long instructions, long frames, String sha256) {
+    }
 }

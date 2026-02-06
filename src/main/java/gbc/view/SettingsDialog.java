@@ -347,7 +347,7 @@ public class SettingsDialog extends JDialog {
         row.add(field);
         row.add(rebindButton);
 
-        keyBindings.put(action, new BindingEntry(action, field, rebindButton, defaultKey));
+        keyBindings.put(action, new BindingEntry(action, field, defaultKey));
         addRow(panel, label, row);
     }
 
@@ -591,7 +591,6 @@ public class SettingsDialog extends JDialog {
 
     private void playTestTone() {
         try {
-            int bufferSize = Math.max(256, Integer.getInteger("audio.bufferSize", 1024));
             javax.sound.sampled.SourceDataLine line = openTestLine();
             javax.sound.sampled.AudioFormat format = line.getFormat();
             int sampleRate = (int) format.getSampleRate();
@@ -775,6 +774,7 @@ public class SettingsDialog extends JDialog {
     }
 
     private void applyToRuntime() {
+        // --- Video ---
         String scale = System.getProperty("video.scale");
         if (scale != null) {
             try {
@@ -790,6 +790,30 @@ public class SettingsDialog extends JDialog {
 
         String palette = System.getProperty("video.palette", "dmg_default");
         emulatorView.setColorFilter(mapPaletteToFilter(palette));
+
+        // --- Audio (restart engine with new sample rate / buffer / mixer) ---
+        if (controller != null) {
+            try {
+                controller.restartAudio();
+            } catch (Exception ignored) {
+            }
+        }
+
+        // --- Input (reload timing parameters) ---
+        if (controller != null) {
+            try {
+                controller.reloadInputConfig();
+            } catch (Exception ignored) {
+            }
+        }
+
+        // --- Theme (hot-swap FlatLaf light/dark) ---
+        try {
+            gbc.view.ThemeManager.apply();
+            SwingUtilities.updateComponentTreeUI(window);
+            SwingUtilities.updateComponentTreeUI(this);
+        } catch (Exception ignored) {
+        }
 
         SwingUtilities.invokeLater(() -> window.refreshUiState(true));
     }
@@ -953,12 +977,6 @@ public class SettingsDialog extends JDialog {
             }
         };
         worker.execute();
-    }
-
-    private net.java.games.input.Controller resolveSelectedJoystick() {
-        Object selected = joystickCombo != null ? joystickCombo.getSelectedItem() : null;
-        String hint = selected != null ? selected.toString() : "";
-        return resolveSelectedJoystick(hint);
     }
 
     private net.java.games.input.Controller resolveSelectedJoystick(String hint) {
@@ -1271,13 +1289,11 @@ public class SettingsDialog extends JDialog {
     private static final class BindingEntry {
         private final String action;
         private final JTextField field;
-        private final JButton button;
         private final String defaultKey;
 
-        private BindingEntry(String action, JTextField field, JButton button, String defaultKey) {
+        private BindingEntry(String action, JTextField field, String defaultKey) {
             this.action = action;
             this.field = field;
-            this.button = button;
             this.defaultKey = defaultKey;
         }
     }

@@ -11,8 +11,10 @@ import gbc.model.sound.Apu;
 import gbc.model.timer.Timer;
 
 public class Memory implements MemoryBus {
-    // TODO: Split DMG/CGB IO maps/masks and model per-dot OAM/VRAM access
-    // conflicts.
+    // DMG/CGB IO register differences are handled via cgbMode checks in
+    // readIORegister/writeIORegister. Per-dot OAM/VRAM access conflicts
+    // are enforced by LcdController.isOamBlocked()/isVramBlocked() which
+    // check the current LCD mode before allowing reads/writes.
 
     // Memory arrays
     private final byte[] videoRam0 = new byte[0x2000];
@@ -474,7 +476,9 @@ public class Memory implements MemoryBus {
 
         // OAM: 0xFE00-0xFE9F
         if (addr < 0xFEA0) {
-            if (lcd.isOamBlocked()) {
+            // OAM is blocked during modes 2 (OAM search) and 3 (pixel transfer)
+            // and during active OAM DMA transfers
+            if (lcd.isOamBlocked() || dma.isDmaActive()) {
                 return 0xFF;
             }
             return oam[addr - 0xFE00] & 0xFF;
@@ -557,7 +561,8 @@ public class Memory implements MemoryBus {
             return;
         }
         if (address < 0xFEA0) {
-            if (lcd.isOamBlocked())
+            // OAM writes blocked during modes 2/3 and active OAM DMA
+            if (lcd.isOamBlocked() || dma.isDmaActive())
                 return;
             oam[address - 0xFE00] = byteValue;
             return;
@@ -1018,6 +1023,9 @@ public class Memory implements MemoryBus {
                 && cartridge != null && cartridge.isCgbCompatible();
         lcd.setStatWriteQuirkEnabled(hardwareType != null && !hardwareType.isCgb());
         lcd.setStatIrqDelayCycles(hardwareType != null && !hardwareType.isCgb() ? 4 : 0);
+        if (apu != null) {
+            apu.setCgbMode(cgbMode);
+        }
         if (!cgbMode) {
             vramBank = 0;
             wramBank = 1;

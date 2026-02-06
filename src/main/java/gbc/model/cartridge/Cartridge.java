@@ -8,9 +8,17 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public abstract class Cartridge {
-    // TODO: Add header validation (logo/checksum) and RTC/battery-backed persistence hooks.
     private static final Logger LOGGER = Logger.getLogger(Cartridge.class.getName());
-    
+
+    private static final byte[] NINTENDO_LOGO = new byte[] {
+            (byte) 0xCE, (byte) 0xED, 0x66, 0x66, (byte) 0xCC, 0x0D, 0x00, 0x0B,
+            0x03, 0x73, 0x00, (byte) 0x83, 0x00, 0x0C, 0x00, 0x0D,
+            0x00, 0x08, 0x11, 0x1F, (byte) 0x88, (byte) 0x89, 0x00, 0x0E,
+            (byte) 0xDC, (byte) 0xCC, 0x6E, (byte) 0xE6, (byte) 0xDD, (byte) 0xDD, (byte) 0xD9, (byte) 0x99,
+            (byte) 0xBB, (byte) 0xBB, 0x67, 0x63, 0x6E, 0x0E, (byte) 0xEC, (byte) 0xCC,
+            (byte) 0xDD, (byte) 0xDC, (byte) 0x99, (byte) 0x9F, (byte) 0xBB, (byte) 0xB9, 0x33, 0x3E
+    };
+
     protected byte[] data;
     protected byte[] ram;
     protected Path romPath;
@@ -29,8 +37,16 @@ public abstract class Cartridge {
         return data;
     }
 
+    public int getCartridgeType() {
+        if (data == null || data.length <= 0x147) {
+            return 0x00;
+        }
+        return data[0x147] & 0xFF;
+    }
+
     /**
-     * Returns the title from the ROM header (0x0134-0x0143), trimmed and uppercased.
+     * Returns the title from the ROM header (0x0134-0x0143), trimmed and
+     * uppercased.
      */
     public String getTitle() {
         if (data == null || data.length < 0x144) {
@@ -59,6 +75,40 @@ public abstract class Cartridge {
         return data[0x14D] & 0xFF;
     }
 
+    public int getComputedHeaderChecksum() {
+        if (data == null || data.length <= 0x14D) {
+            return 0x00;
+        }
+        int checksum = 0;
+        for (int i = 0x0134; i <= 0x014C; i++) {
+            checksum = (checksum - (data[i] & 0xFF) - 1) & 0xFF;
+        }
+        return checksum & 0xFF;
+    }
+
+    public boolean isHeaderChecksumValid() {
+        if (data == null || data.length <= 0x14D) {
+            return false;
+        }
+        return getComputedHeaderChecksum() == getHeaderChecksum();
+    }
+
+    public boolean isNintendoLogoValid() {
+        if (data == null || data.length < 0x0134 + NINTENDO_LOGO.length) {
+            return false;
+        }
+        for (int i = 0; i < NINTENDO_LOGO.length; i++) {
+            if (data[0x0104 + i] != NINTENDO_LOGO[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean validateHeader() {
+        return isNintendoLogoValid() && isHeaderChecksumValid();
+    }
+
     public byte[] getRam() {
         return ram;
     }
@@ -82,7 +132,7 @@ public abstract class Cartridge {
     public boolean isCgbOnly() {
         return getCgbFlag() == 0xC0;
     }
-    
+
     /**
      * Sets the ROM file path. Used to determine where to save SRAM.
      */
@@ -93,14 +143,14 @@ public abstract class Cartridge {
     public Path getRomPath() {
         return romPath;
     }
-    
+
     /**
      * Returns true if this cartridge has a battery for SRAM persistence.
      */
     public boolean hasBattery() {
         return hasBattery;
     }
-    
+
     /**
      * Gets the save file path for battery-backed RAM.
      * The save file is stored alongside the ROM with a .sav extension.
@@ -117,7 +167,23 @@ public abstract class Cartridge {
         }
         return romPath.getParent().resolve(saveName);
     }
-    
+
+    protected Path getSaveFilePathWithExtension(String extension) {
+        if (romPath == null) {
+            return null;
+        }
+        String safeExtension = extension.startsWith(".") ? extension : "." + extension;
+        String romName = romPath.getFileName().toString();
+        String baseName = romName.contains(".")
+                ? romName.replaceFirst("\\.[^.]+$", safeExtension)
+                : romName + safeExtension;
+        String saveDir = System.getProperty("emulator.saveDir");
+        if (saveDir != null && !saveDir.isBlank()) {
+            return Path.of(saveDir).resolve(baseName);
+        }
+        return romPath.getParent().resolve(baseName);
+    }
+
     /**
      * Saves the battery-backed RAM to disk.
      * Only saves if the cartridge has a battery and RAM.
@@ -126,13 +192,13 @@ public abstract class Cartridge {
         if (!hasBattery || ram == null || ram.length == 0) {
             return;
         }
-        
+
         Path savePath = getSaveFilePath();
         if (savePath == null) {
             LOGGER.warning("Cannot save SRAM: ROM path not set");
             return;
         }
-        
+
         try {
             Files.createDirectories(savePath.getParent());
             Files.write(savePath, ram);
@@ -141,7 +207,7 @@ public abstract class Cartridge {
             LOGGER.log(Level.SEVERE, "Failed to save SRAM to " + savePath, e);
         }
     }
-    
+
     /**
      * Loads the battery-backed RAM from disk.
      * Only loads if the cartridge has a battery and a save file exists.
@@ -150,13 +216,13 @@ public abstract class Cartridge {
         if (!hasBattery || ram == null) {
             return;
         }
-        
+
         Path savePath = getSaveFilePath();
         if (savePath == null || !Files.exists(savePath)) {
             LOGGER.log(Level.FINE, () -> "No save file found: " + savePath);
             return;
         }
-        
+
         try {
             byte[] savedData = Files.readAllBytes(savePath);
             int copyLength = Math.min(savedData.length, ram.length);

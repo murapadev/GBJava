@@ -1,14 +1,22 @@
 package gbc.model.sound;
 
 /**
- * Square wave channel for Game Boy APU (channels 1 and 2)
+ * Square wave channel for Game Boy APU (channels 1 and 2).
  * Generates square waves with duty cycle, frequency, and volume envelope
- * control
+ * control.
+ *
+ * <p>
+ * Implements hardware-accurate timing quirks:
+ * <ul>
+ * <li>Extra length clocking when enabling length counter on an odd frame
+ * sequencer step</li>
+ * <li>Trigger edge cases: length reload from 0, frequency timer reset, envelope
+ * restart</li>
+ * <li>Sweep negate-mode disable (handled in {@link Sweep})</li>
+ * <li>DAC disable immediately silences channel</li>
+ * </ul>
  */
 public class SquareChannel {
-    // TODO: Implement exact length/sweep/envelope timing quirks and trigger edge
-    // cases.
-    private final int volumeRegisterAddress;
     private final int lengthDutyRegisterAddress;
     private final int freqLowRegisterAddress;
     private final int freqHighRegisterAddress;
@@ -26,10 +34,11 @@ public class SquareChannel {
     private int lengthTimer;
     // Cached current sample for fast access
     private float currentSample;
+    // Frame sequencer step (0-7), updated by APU each tick
+    private int frameSequencerStep;
 
     public SquareChannel(int lengthRegisterAddress, int volumeRegisterAddress, boolean useSweep,
             int frequencyLowDataRegisterAddress, int frequencyHighDataRegisterAddress) {
-        this.volumeRegisterAddress = volumeRegisterAddress;
         this.lengthDutyRegisterAddress = lengthRegisterAddress;
         this.freqLowRegisterAddress = frequencyLowDataRegisterAddress;
         this.freqHighRegisterAddress = frequencyHighDataRegisterAddress;
@@ -160,6 +169,14 @@ public class SquareChannel {
         dutyPosition = value;
     }
 
+    /**
+     * Update the frame sequencer step, called by APU each frame sequencer tick.
+     * Used for length counter extra-clocking quirk on NRx4 writes.
+     */
+    public void setFrameSequencerStep(int step) {
+        this.frameSequencerStep = step;
+    }
+
     private boolean isDacOn() {
         return volumeEnvelope.isDacEnabled();
     }
@@ -213,13 +230,34 @@ public class SquareChannel {
             return;
         }
         if (address == freqHighRegisterAddress) {
+            boolean wasLengthEnabled = isLengthTimerEnabled();
             freqHighRegister = value;
+            boolean nowLengthEnabled = isLengthTimerEnabled();
             boolean trigger = (value & 0b1000_0000) != 0;
-            if (trigger && isDacOn()) {
-                triggerEvent();
+
+            // Extra length clocking quirk: when length enable transitions 0→1
+            // on an odd frame sequencer step (1,3,5,7 — steps that don't clock length),
+            // the length counter gets an extra decrement.
+            boolean onNonLengthStep = (frameSequencerStep & 1) != 0;
+            if (!wasLengthEnabled && nowLengthEnabled && onNonLengthStep && lengthTimer > 0) {
+                lengthTimer--;
+                if (lengthTimer == 0 && !trigger) {
+                    disableChannel();
+                }
             }
+
             if (trigger) {
-                lengthTimer = lengthTimer == 0 ? 64 : lengthTimer;
+                // Reload length from 0 to max on trigger
+                if (lengthTimer == 0) {
+                    lengthTimer = 64;
+                    // If length enabled and on a non-length step, extra clock
+                    if (nowLengthEnabled && onNonLengthStep) {
+                        lengthTimer--;
+                    }
+                }
+                if (isDacOn()) {
+                    triggerEvent();
+                }
             }
             return;
         }

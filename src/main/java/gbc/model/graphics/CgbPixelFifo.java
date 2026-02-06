@@ -4,7 +4,19 @@ import gbc.model.memory.Memory;
 
 /**
  * Pixel FIFO implementation for Game Boy Color (CGB).
- * Uses CGB palettes and tile attributes for color resolution.
+ *
+ * <p>CGB priority rules (evaluated in {@link #resolveColor}):
+ * <ol>
+ *   <li>If sprite pixel is transparent (color 0) → show BG</li>
+ *   <li>If LCDC bit 0 is clear (master priority off) → sprites always win</li>
+ *   <li>If BG pixel is color 0 → sprite wins</li>
+ *   <li>If BG tile has priority attribute set (bit 7) → BG wins</li>
+ *   <li>If sprite OAM priority bit is set (behind BG) and BG non-zero → BG wins</li>
+ *   <li>Otherwise → sprite wins</li>
+ * </ol>
+ *
+ * <p>Among overlapping sprites: lower OAM index always wins (CGB does not
+ * use X position for OBJ-to-OBJ priority).
  */
 public class CgbPixelFifo implements PixelFifo {
     private final IntQueue bgPixels = new IntQueue(16);
@@ -49,22 +61,27 @@ public class CgbPixelFifo implements PixelFifo {
 
     private int resolveColor(int bgPixel, int bgPalette, int bgPrio, int objPixel, int objPalette, int objBehind) {
         boolean masterPriority = (memory.getLcdc() & 0x01) != 0;
+        // 1. Transparent sprite pixel → always show BG
         if (objPixel == 0) {
             return getCgbBgColor(bgPalette, bgPixel);
         }
+        // 2. LCDC bit 0 clear → sprites always win (master BG priority off)
         if (!masterPriority) {
             return getCgbObjColor(objPalette, objPixel);
         }
+        // 3. BG color 0 → sprite wins
         if (bgPixel == 0) {
             return getCgbObjColor(objPalette, objPixel);
         }
+        // 4. BG tile priority attribute set → BG wins over sprite
         if (bgPrio != 0) {
             return getCgbBgColor(bgPalette, bgPixel);
         }
+        // 5. Sprite OAM priority bit set (behind BG) and BG non-zero → BG wins
         if (objBehind != 0) {
             return getCgbBgColor(bgPalette, bgPixel);
         }
-        // TODO: Verify CGB priority rules (BG priority bit vs OBJ priority) against hardware tests.
+        // 6. Sprite wins
         return getCgbObjColor(objPalette, objPixel);
     }
 

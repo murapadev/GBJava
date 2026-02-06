@@ -1,9 +1,9 @@
 package gbc.controller.config;
 
+import java.util.Locale;
+
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-
-import java.util.Locale;
 
 public final class AppConfig {
     private static final AppConfig INSTANCE = new AppConfig();
@@ -17,32 +17,71 @@ public final class AppConfig {
         return INSTANCE;
     }
 
+    /**
+     * Returns an integer setting. System properties (set at runtime by the
+     * Settings dialog) take priority over the static HOCON config so that
+     * changes applied through the UI are visible immediately.
+     */
     public int getInt(String path, int defaultValue) {
-        if (config.hasPath(path)) {
-            return config.getInt(path);
+        String sysProp = System.getProperty(path);
+        if (sysProp != null && !sysProp.isBlank()) {
+            try {
+                return Integer.parseInt(sysProp.trim());
+            } catch (NumberFormatException ignored) {
+            }
         }
-        return Integer.getInteger(path, defaultValue);
+        if (config.hasPath(path)) {
+            try {
+                return config.getInt(path);
+            } catch (Exception ignored) {
+            }
+        }
+        return defaultValue;
     }
 
     public long getLong(String path, long defaultValue) {
-        if (config.hasPath(path)) {
-            return config.getLong(path);
+        String sysProp = System.getProperty(path);
+        if (sysProp != null && !sysProp.isBlank()) {
+            try {
+                return Long.parseLong(sysProp.trim());
+            } catch (NumberFormatException ignored) {
+            }
         }
-        return Long.getLong(path, defaultValue);
+        if (config.hasPath(path)) {
+            try {
+                return config.getLong(path);
+            } catch (Exception ignored) {
+            }
+        }
+        return defaultValue;
     }
 
     public boolean getBoolean(String path, boolean defaultValue) {
-        if (config.hasPath(path)) {
-            return config.getBoolean(path);
+        String sysProp = System.getProperty(path);
+        if (sysProp != null && !sysProp.isBlank()) {
+            return Boolean.parseBoolean(sysProp.trim());
         }
-        return Boolean.parseBoolean(System.getProperty(path, Boolean.toString(defaultValue)));
+        if (config.hasPath(path)) {
+            try {
+                return config.getBoolean(path);
+            } catch (Exception ignored) {
+            }
+        }
+        return defaultValue;
     }
 
     public String getString(String path, String defaultValue) {
-        if (config.hasPath(path)) {
-            return config.getString(path);
+        String sysProp = System.getProperty(path);
+        if (sysProp != null) {
+            return sysProp;
         }
-        return System.getProperty(path, defaultValue);
+        if (config.hasPath(path)) {
+            try {
+                return config.getString(path);
+            } catch (Exception ignored) {
+            }
+        }
+        return defaultValue;
     }
 
     public String getStringLower(String path, String defaultValue) {

@@ -1,29 +1,36 @@
 package gbc.view;
 
-import gbc.model.GameBoyColor;
-import gbc.model.graphics.FrameBuffer;
-import gbc.model.graphics.Screen;
-import gbc.model.graphics.PPU;
-
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-
-import javax.swing.*;
-import java.awt.*;
+import java.awt.Color;
+import java.awt.Container;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.image.BufferedImage;
 import java.io.Serial;
 import java.util.Objects;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
+import gbc.model.GameBoyColor;
+import gbc.model.graphics.FrameBuffer;
+import gbc.model.graphics.PPU;
+import gbc.model.graphics.Screen;
 
 /**
  * EmulatorView with configurable scaling, filters, and display options
  */
 public class EmulatorView extends JPanel {
-
-    private static final Logger LOGGER = Logger.getLogger(EmulatorView.class.getName());
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -140,7 +147,8 @@ public class EmulatorView extends JPanel {
             int x = (getWidth() - displaySize.width) / 2;
             int y = (getHeight() - displaySize.height) / 2;
 
-            RenderKey key = new RenderKey(currentFrameId, displaySize.width, displaySize.height, colorFilter, smoothScaling);
+            RenderKey key = new RenderKey(currentFrameId, displaySize.width, displaySize.height, colorFilter,
+                    smoothScaling);
             BufferedImage sourceImage = image;
             BufferedImage rendered = renderCache.get(key, k -> buildRenderedImage(sourceImage, displaySize));
 

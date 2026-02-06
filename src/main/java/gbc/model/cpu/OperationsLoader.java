@@ -20,9 +20,6 @@ import gbc.model.memory.Memory;
  * flow.
  */
 public class OperationsLoader {
-    // TODO: Validate opcode tables/cycle counts and replace fallback executor paths
-    // with real behavior.
-
     private static final Logger LOGGER = Logger.getLogger(OperationsLoader.class.getName());
 
     private final Map<Integer, Operation> operations;
@@ -64,10 +61,38 @@ public class OperationsLoader {
         ensureAllOpcodesRegistered(operations, groupedOperations, false);
         ensureAllOpcodesRegistered(cbOperations, groupedCbOperations, true);
 
+        validateOperations(operations, false);
+        validateOperations(cbOperations, true);
+
         // Populate fast lookup arrays
         for (int i = 0; i < 256; i++) {
             operationsArray[i] = operations.get(i);
             cbOperationsArray[i] = cbOperations.get(i);
+        }
+    }
+
+    private void validateOperations(Map<Integer, Operation> table, boolean cbPrefixed) {
+        for (Map.Entry<Integer, Operation> entry : table.entrySet()) {
+            int opcode = entry.getKey() & 0xFF;
+            Operation op = entry.getValue();
+            if (op == null) {
+                continue;
+            }
+            if (op.getMnemonic() == null || op.getMnemonic().isBlank()) {
+                op.setMnemonic("INVALID");
+                LOGGER.log(Level.WARNING, () -> String.format("Opcode 0x%02X missing mnemonic", opcode));
+            }
+            if (op.getBytes() <= 0) {
+                op.setBytes(cbPrefixed ? 2 : 1);
+                LOGGER.log(Level.WARNING, () -> String.format("Opcode 0x%02X missing byte size", opcode));
+            }
+            if (op.getCycles() == null || op.getCycles().isEmpty()) {
+                op.setCycles(java.util.List.of(cbPrefixed ? 8 : 4));
+                LOGGER.log(Level.WARNING, () -> String.format("Opcode 0x%02X missing cycle info", opcode));
+            }
+            if (op.getOperands() == null) {
+                op.setOperands(java.util.List.of());
+            }
         }
     }
 
@@ -236,6 +261,8 @@ public class OperationsLoader {
                     mem.writeByte(0xFF04, (byte) 0x00); // DIV reset
                     int tma = mem.readByte(0xFF06) & 0xFF;
                     mem.writeByte(0xFF05, (byte) tma); // TIMA reload
+                } else if (cpu != null) {
+                    cpu.setStopped(true);
                 }
             };
         }
@@ -273,16 +300,25 @@ public class OperationsLoader {
             };
         }
 
-        // Fallback for unimplemented mnemonics: consume bytes so execution can continue
+        // Treat unknown mnemonics as invalid to keep behavior consistent.
+        return createUnknownExecutor(op);
+    }
+
+    private OperationExecutor createUnknownExecutor(Operation op) {
+        final int opBytes = Math.max(1, op.getBytes());
+        final boolean opImmediate = op.isImmediate();
         return (regs, mem, ops) -> {
-            LOGGER.log(Level.WARNING, () -> String.format("Unimplemented operation %s at PC=0x%04X",
-                    op.getMnemonic(), regs.getPC() & 0xFFFF));
-            int b = op.getBytes();
-            if (b > 1) {
-                for (int i = 0; i < b - 1; i++)
+            int pc = (regs.getPC() - 1) & 0xFFFF;
+            int opcode = mem.readByte(pc) & 0xFF;
+            LOGGER.log(Level.WARNING, () -> String.format("Unimplemented opcode at PC=0x%04X op=0x%02X (%s)",
+                    pc, opcode, op.getMnemonic()));
+            if (cpu != null) {
+                cpu.onInvalidOpcode(pc, opcode);
+            }
+            if (opImmediate && opBytes > 1) {
+                for (int i = 0; i < opBytes - 1; i++) {
                     regs.incrementPC();
-            } else {
-                regs.incrementPC();
+                }
             }
         };
     }

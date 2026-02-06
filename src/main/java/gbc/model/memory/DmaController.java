@@ -1,11 +1,24 @@
 package gbc.model.memory;
 
 /**
- * OAM DMA and CGB HDMA controller extracted from Memory.
+ * OAM DMA and CGB HDMA controller.
+ *
+ * <h3>OAM DMA Timing</h3>
+ * <p>OAM DMA transfers 160 bytes at 1 byte per 4 T-cycles (160 M-cycles total).
+ * There is an 8 T-cycle startup delay after writing to FF46. During active DMA,
+ * the CPU can only access HRAM (FF80-FFFE) and IO registers (FF00-FF7F).
+ *
+ * <h3>Bus Conflicts</h3>
+ * <p>On restart (writing FF46 while DMA is active), the previous transfer's
+ * bus lock persists through the new startup delay. The old transfer is aborted
+ * and the new one begins from byte 0.
+ *
+ * <h3>HDMA (CGB only)</h3>
+ * <p>General-purpose DMA transfers 16 bytes per block. HBlank DMA transfers
+ * one 16-byte block per HBlank period. Writing bit 7=0 to FF55 while HBlank
+ * DMA is active cancels the transfer. LCD disable also cancels HBlank DMA.
  */
 public class DmaController {
-    // TODO: Refine OAM DMA/HDMA timing (bus conflicts, restarts, HBlank
-    // scheduling).
 
     private static final int DMA_TRANSFER_LENGTH = 160;
 

@@ -1,16 +1,16 @@
 package gbc.controller;
 
-import java.awt.KeyboardFocusManager;
 import java.awt.KeyEventDispatcher;
+import java.awt.KeyboardFocusManager;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.io.File;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -24,11 +24,11 @@ import java.util.logging.Logger;
 
 import javax.swing.SwingUtilities;
 
-import gbc.controller.io.RomLoader;
+import gbc.controller.audio.AudioEngine;
 import gbc.controller.input.JoystickManager;
+import gbc.controller.io.RomLoader;
 import gbc.model.GameBoyColor;
 import gbc.model.cartridge.Cartridge;
-import gbc.controller.audio.AudioEngine;
 import gbc.view.EmulatorUi;
 import gbc.view.EmulatorWindow;
 
@@ -189,7 +189,8 @@ public class EmulatorController implements EmulatorActions {
             case "b" -> gbc.getController().setB(pressed);
             case "start" -> gbc.getController().setStart(pressed);
             case "select" -> gbc.getController().setSelect(pressed);
-            default -> { }
+            default -> {
+            }
         }
     }
 
@@ -206,7 +207,8 @@ public class EmulatorController implements EmulatorActions {
             case "load0" -> loadState(0);
             case "load1" -> loadState(1);
             case "load2" -> loadState(2);
-            default -> { }
+            default -> {
+            }
         }
     }
 
@@ -439,6 +441,18 @@ public class EmulatorController implements EmulatorActions {
     @Override
     public EmulatorStatusPublisher statusPublisher() {
         return statusPublisher;
+    }
+
+    @Override
+    public void restartAudio() {
+        audioEngine.restart(gbc);
+        LOGGER.info("Audio engine restarted with updated settings");
+    }
+
+    @Override
+    public void reloadInputConfig() {
+        inputCoordinator.reconfigure();
+        LOGGER.info("Input configuration reloaded");
     }
 
     @Override

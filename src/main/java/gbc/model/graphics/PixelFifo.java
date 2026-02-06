@@ -2,10 +2,21 @@ package gbc.model.graphics;
 
 /**
  * Pixel FIFO interface for Game Boy PPU pixel rendering.
- * Handles queuing pixels and outputting them to the screen.
+ *
+ * <h3>Priority Semantics</h3>
+ * <p><b>DMG:</b> Sprite pixels win over BG unless the sprite's OAM priority bit
+ * (bit 7) is set AND the BG color is non-zero. Among overlapping sprites,
+ * lower X position wins; ties are broken by lower OAM index.
+ *
+ * <p><b>CGB:</b> LCDC bit 0 acts as a master BG priority switch.
+ * When clear, sprites always win over BG. When set, the BG tile attribute
+ * priority bit (bit 7) can force BG over sprites. Among sprites,
+ * lower OAM index always wins (X position is not used for CGB priority).
+ *
+ * <p>Both implementations share this interface. The overlay/priority logic
+ * is handled in {@link #setOverlay} and {@link #putPixelToScreen}.
  */
 public interface PixelFifo {
-    // TODO: Define precise overlay/priority semantics shared by DMG/CGB implementations.
 
     /**
      * Get the current length of the FIFO queue.

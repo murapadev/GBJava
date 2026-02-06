@@ -6,7 +6,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -27,10 +26,10 @@ public class SaveStateManager {
     private final BooleanSupplier isCartridgeLoaded;
 
     public SaveStateManager(GameBoyColor gbc,
-                            ReentrantLock emulationLock,
-                            ExecutorService ioExecutor,
-                            Function<Boolean, Boolean> setPaused,
-                            BooleanSupplier isCartridgeLoaded) {
+            ReentrantLock emulationLock,
+            ExecutorService ioExecutor,
+            Function<Boolean, Boolean> setPaused,
+            BooleanSupplier isCartridgeLoaded) {
         this.gbc = gbc;
         this.emulationLock = emulationLock;
         this.ioExecutor = ioExecutor;

@@ -5,8 +5,6 @@ package gbc.model.sound;
  * Handles all audio generation and mixing for the four sound channels
  */
 public class Apu {
-    // TODO: Match hardware APU timing/mixing (CGB vs DMG) and DAC behavior more
-    // precisely.
     // Wave duty patterns for square channels
     static final float[][] WAVE_DUTY = {
             { 0f, 0f, 0f, 0f, 0f, 0f, 0f, 1f }, // 12.5%
@@ -41,13 +39,21 @@ public class Apu {
     private int frameSequencerCycleCounter;
     private boolean enabled;
     private final int cyclesPerSample;
+    private boolean cgbMode;
+    private float leftHpfPrevInput;
+    private float rightHpfPrevInput;
+    private float leftHpfPrevOutput;
+    private float rightHpfPrevOutput;
+    private final boolean useDcFilter;
+    private final float hpfCoeff;
+    private final float dmgMixGain;
+    private final float cgbMixGain;
 
     // Sample cache - avoid recalculating when audio state hasn't changed
     private float cachedLeftSample;
     private float cachedRightSample;
     private boolean sampleCacheDirty = true;
     private static final boolean AUDIO_DEBUG = Boolean.getBoolean("gbc.audio.debug");
-    private long bufferFillCount;
     private boolean loggedEnable;
 
     private void logDebug(String message) {
@@ -82,8 +88,18 @@ public class Apu {
         int bufferCount = Math.max(2, Integer.getInteger("audio.bufferCount", 4));
         this.buffers = new byte[bufferCount][bufferSize];
         this.outputBuffer = new byte[bufferSize];
+        this.useDcFilter = Boolean.parseBoolean(System.getProperty("audio.dcFilter", "true"));
+        this.hpfCoeff = clamp(Float.parseFloat(System.getProperty("audio.dcFilterCoeff", "0.995")), 0.90f, 0.9999f);
+        this.dmgMixGain = clamp(Float.parseFloat(System.getProperty("audio.dmgMixGain", "1.0")), 0.1f, 2.0f);
+        this.cgbMixGain = clamp(Float.parseFloat(System.getProperty("audio.cgbMixGain", "1.0")), 0.1f, 2.0f);
         updatePanningCache();
         updateVolumeCache();
+        setCgbMode(false);
+    }
+
+    public void setCgbMode(boolean cgbMode) {
+        this.cgbMode = cgbMode;
+        channel3.setCgbMode(cgbMode);
     }
 
     private void updatePanningCache() {
@@ -133,6 +149,12 @@ public class Apu {
                 frameSequencerCycleCounter = 0;
                 frameSequencer = (frameSequencer + 1) & 7;
 
+                // Propagate frame sequencer step to channels for length-counter quirks
+                channel1.setFrameSequencerStep(frameSequencer);
+                channel2.setFrameSequencerStep(frameSequencer);
+                channel3.setFrameSequencerStep(frameSequencer);
+                channel4.setFrameSequencerStep(frameSequencer);
+
                 boolean stepLength = (frameSequencer & 1) == 0; // 0,2,4,6
                 boolean stepSweep = frameSequencer == 2 || frameSequencer == 6;
                 boolean stepEnvelope = frameSequencer == 7;
@@ -178,9 +200,18 @@ public class Apu {
             sampleCacheDirty = false;
         }
 
+        float leftSample = cachedLeftSample * (cgbMode ? cgbMixGain : dmgMixGain);
+        float rightSample = cachedRightSample * (cgbMode ? cgbMixGain : dmgMixGain);
+        if (useDcFilter) {
+            leftSample = applyHighPassFilter(leftSample, true);
+            rightSample = applyHighPassFilter(rightSample, false);
+        }
+        leftSample = clamp(leftSample, -1f, 1f);
+        rightSample = clamp(rightSample, -1f, 1f);
+
         byte[] buffer = buffers[writeBufferIndex];
-        buffer[bufferPosition++] = (byte) (128 + (int) (cachedLeftSample * 127f));
-        buffer[bufferPosition++] = (byte) (128 + (int) (cachedRightSample * 127f));
+        buffer[bufferPosition++] = (byte) (128 + (int) (leftSample * 127f));
+        buffer[bufferPosition++] = (byte) (128 + (int) (rightSample * 127f));
 
         if (bufferPosition >= buffer.length) {
             enqueueFilledBuffer();
@@ -257,17 +288,48 @@ public class Apu {
             channel1.setDutyPosition(0);
             channel2.setDutyPosition(0);
             channel3.setDutyPosition(0);
+            resetDcFilter();
+            invalidateSampleCache();
         } else if (!enabled && enable) {
             // Turn on
             enabled = true;
             frameSequencer = 0;
             frameSequencerCycleCounter = 0;
             cycleCounter = 0;
+            resetDcFilter();
+            invalidateSampleCache();
             if (AUDIO_DEBUG && !loggedEnable) {
                 loggedEnable = true;
                 logDebug("[APU] Enabled");
             }
         }
+    }
+
+    private void resetDcFilter() {
+        leftHpfPrevInput = 0f;
+        rightHpfPrevInput = 0f;
+        leftHpfPrevOutput = 0f;
+        rightHpfPrevOutput = 0f;
+    }
+
+    private float applyHighPassFilter(float input, boolean left) {
+        if (!useDcFilter) {
+            return input;
+        }
+        if (left) {
+            float output = input - leftHpfPrevInput + hpfCoeff * leftHpfPrevOutput;
+            leftHpfPrevInput = input;
+            leftHpfPrevOutput = output;
+            return output;
+        }
+        float output = input - rightHpfPrevInput + hpfCoeff * rightHpfPrevOutput;
+        rightHpfPrevInput = input;
+        rightHpfPrevOutput = output;
+        return output;
+    }
+
+    private float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     public int readRegister(int address) {

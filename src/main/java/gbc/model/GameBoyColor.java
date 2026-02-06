@@ -14,9 +14,20 @@ import gbc.model.input.Controller;
 import gbc.model.memory.Memory;
 import gbc.model.trace.TraceGenerator;
 
+/**
+ * Top-level Game Boy / Game Boy Color emulator.
+ *
+ * <p>Architecture: The emulator uses a single {@link Memory} instance that
+ * handles DMG/CGB differences via mode flags. CGB-specific features (VRAM
+ * banking, WRAM banking, HDMA, double speed) are gated by {@code cgbMode}
+ * in Memory. DMG/CGB rendering differences are handled by separate
+ * {@link gbc.model.graphics.PixelFifo} implementations selected at PPU reset.
+ *
+ * <p>Hardware profile is determined at cartridge load time based on the ROM's
+ * CGB flag and the {@code emulator.hardware} system property. The profile
+ * controls initial register state, LCD timing, and APU behavior.
+ */
 public class GameBoyColor {
-	// TODO: Split DMG/CGB hardware profiles to reduce mode-conditionals in the core
-	// model.
 	private static final Logger LOGGER = Logger.getLogger(GameBoyColor.class.getName());
 	private final CPU cpu;
 	private final Memory memory;

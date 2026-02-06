@@ -1,12 +1,23 @@
 package gbc.model.cpu;
 
-import gbc.model.memory.Memory;
-
 import java.util.List;
 import java.util.Map;
 
+import gbc.model.memory.Memory;
+
 @FunctionalInterface
 public interface OperationExecutor {
-    // TODO: Add a cycle-accurate execution context (internal M-cycles, micro-ops).
     void execute(Registers registers, Memory memory, List<Map<String, Object>> operands);
+
+    default void execute(ExecutionContext context, List<Map<String, Object>> operands) {
+        execute(context.registers(), context.memory(), operands);
+    }
+
+    record ExecutionContext(Registers registers, Memory memory, CPU cpu) {
+        public void tickInternalMcycle() {
+            if (cpu != null) {
+                cpu.tickInternalMcycle();
+            }
+        }
+    }
 }

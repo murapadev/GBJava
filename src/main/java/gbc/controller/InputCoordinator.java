@@ -29,6 +29,15 @@ final class InputCoordinator {
         this.uiActionHandler = uiActionHandler;
     }
 
+    /**
+     * Re-reads input timing settings (debounce, repeat delay/rate, min press)
+     * from system properties. Called after the user applies new settings.
+     */
+    void reconfigure() {
+        repeater.reconfigure();
+        filter.reconfigure();
+    }
+
     void enqueueKey(int keyCode, boolean pressed) {
         enqueueKey(keyCode, pressed, 0);
     }
@@ -182,14 +191,23 @@ final class InputCoordinator {
     }
 
     private static final class InputRepeater {
-        private final long repeatDelayNs = TimeUnit.MILLISECONDS.toNanos(
-                Math.max(0, Integer.getInteger("input.repeatDelayMs", 250)));
-        private final long repeatRateNs = TimeUnit.MILLISECONDS.toNanos(
-                Math.max(1, Integer.getInteger("input.repeatRateMs", 40)));
+        private long repeatDelayNs;
+        private long repeatRateNs;
 
         private final java.util.Map<String, Long> pressedAt = new java.util.HashMap<>();
         private final java.util.Map<String, Long> lastRepeat = new java.util.HashMap<>();
         private final java.util.Map<String, Boolean> down = new java.util.HashMap<>();
+
+        InputRepeater() {
+            reconfigure();
+        }
+
+        void reconfigure() {
+            repeatDelayNs = TimeUnit.MILLISECONDS.toNanos(
+                    Math.max(0, Integer.getInteger("input.repeatDelayMs", 250)));
+            repeatRateNs = TimeUnit.MILLISECONDS.toNanos(
+                    Math.max(1, Integer.getInteger("input.repeatRateMs", 40)));
+        }
 
         void handle(String action, boolean pressed) {
             if (pressed) {
@@ -228,15 +246,24 @@ final class InputCoordinator {
     }
 
     private static final class InputFilter {
-        private final long debounceNs = TimeUnit.MILLISECONDS.toNanos(
-                Math.max(0, Integer.getInteger("input.debounceMs", 10)));
-        private final long minPressNs = TimeUnit.MILLISECONDS.toNanos(
-                Math.max(0, Integer.getInteger("input.minPressMs", 20)));
+        private long debounceNs;
+        private long minPressNs;
 
         private final java.util.Map<String, Boolean> state = new java.util.HashMap<>();
         private final java.util.Map<String, Long> lastEvent = new java.util.HashMap<>();
         private final java.util.Map<String, Long> pressTime = new java.util.HashMap<>();
         private final java.util.Map<String, Long> pendingReleaseAt = new java.util.HashMap<>();
+
+        InputFilter() {
+            reconfigure();
+        }
+
+        void reconfigure() {
+            debounceNs = TimeUnit.MILLISECONDS.toNanos(
+                    Math.max(0, Integer.getInteger("input.debounceMs", 10)));
+            minPressNs = TimeUnit.MILLISECONDS.toNanos(
+                    Math.max(0, Integer.getInteger("input.minPressMs", 20)));
+        }
 
         boolean isGameAction(String action) {
             return switch (action) {

@@ -57,6 +57,9 @@ public class Fetcher {
 
     private final int[] pixelLine = new int[8];
     private int tickCounter;
+    // Sprite fetch timing: each sprite fetch incurs a 6-dot minimum penalty
+    private int spriteFetchPenalty;
+    private static final int SPRITE_FETCH_MIN_PENALTY = 6;
 
     public Fetcher(PixelFifo fifo, Memory memory) {
         this.fifo = fifo;
@@ -70,6 +73,7 @@ public class Fetcher {
         this.hasSavedBgState = false;
         this.tickCounter = 0;
         this.scxLatched = false;
+        this.spriteFetchPenalty = 0;
     }
 
     public void reset() {
@@ -119,8 +123,13 @@ public class Fetcher {
             return;
         }
 
+        // Absorb sprite fetch penalty cycles before resuming normal operation
+        if (spriteFetchPenalty > 0) {
+            spriteFetchPenalty--;
+            return;
+        }
+
         // Hardware fetcher advances 1 step every 2 T-cycles
-        // TODO: Confirm fetcher phase timing when sprites are injected mid-tile.
         tickCounter++;
         if (tickCounter < 2) {
             return;
@@ -240,7 +249,10 @@ public class Fetcher {
                 // offset.
                 zip(tileData1, tileData2, false, pixelLine);
                 fifo.setOverlay(pixelLine, spriteOffset, spriteAttributes, spriteOamIndex, sprite.getX());
-                // TODO: Account for sprite fetch timing penalties before resuming BG fetch.
+
+                // Apply sprite fetch timing penalty (minimum 6 dots per sprite fetch)
+                spriteFetchPenalty = SPRITE_FETCH_MIN_PENALTY;
+
                 if (hasSavedBgState) {
                     state = savedBgState;
                     tileId = savedTileId;
@@ -272,8 +284,6 @@ public class Fetcher {
         this.spriteOffset = offset;
         this.spriteOamIndex = oamIndex;
 
-        // TODO: Sprite fetch should respect hardware timing constraints (one sprite per
-        // 8 dots; OAM order).
         if (!hasSavedBgState && isBgState(state)) {
             savedBgState = state;
             savedTileId = tileId;

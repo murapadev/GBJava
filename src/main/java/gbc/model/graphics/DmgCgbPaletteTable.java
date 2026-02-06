@@ -16,9 +16,20 @@ import java.util.logging.Logger;
 /**
  * Loads a DMG-on-CGB palette table and selects a palette for DMG cartridges.
  * This emulates the CGB boot ROM palette selection when no boot ROM is present.
+ *
+ * <p>Selection rules (matching CGB boot ROM behavior):
+ * <ol>
+ *   <li>Match by exact ROM title (from cartridge header bytes $0134-$0143)</li>
+ *   <li>Match by title + old licensee code ($014B) for titles with multiple
+ *       publishers (not yet implemented — requires licensee field in Cartridge)</li>
+ *   <li>Match by header checksum ($014D) as a fallback for common checksums</li>
+ *   <li>Fall back to "default" palette (grayscale)</li>
+ * </ol>
+ *
+ * <p>Palettes are loaded from {@code dmg_cgb_palettes.properties} (bundled resource)
+ * or from an external file specified by {@code emulator.dmgCgbPaletteTable} system property.
  */
 public final class DmgCgbPaletteTable {
-    // TODO: Expand palette selection (title+licensee/checksum rules) and validate external tables.
     public record DmgCgbPalette(int[] bg, int[] obj0, int[] obj1) {
         public int[] bg() { return bg; }
         public int[] obj0() { return obj0; }

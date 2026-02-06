@@ -1,7 +1,6 @@
 package gbc.model.cartridge;
 
 public class MBC2 extends Cartridge {
-    // TODO: Confirm MBC2 RAM upper-nibble behavior and address decoding edge cases.
     private static final int ROM_BANK_SIZE = 0x4000;
 
     private int romBankNumber = 1;
@@ -51,10 +50,12 @@ public class MBC2 extends Cartridge {
             } else {
                 // ROM bank number (bit 8 of address must be 1)
                 romBankNumber = (value & 0x0F);
-                if (romBankNumber == 0) romBankNumber = 1;
+                if (romBankNumber == 0)
+                    romBankNumber = 1;
             }
         } else if (address >= 0xA000 && address < 0xC000) {
-            if (!ramEnabled) return;
+            if (!ramEnabled)
+                return;
             int index = (address - 0xA000) & 0x01FF;
             ram[index] = (byte) (value & 0x0F);
         }

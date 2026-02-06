@@ -3,13 +3,12 @@ package gbc.model.cartridge;
 import java.util.logging.Logger;
 
 public class MBC1 extends Cartridge {
-    // TODO: Verify bank-0 remap behavior (0x20/0x40/0x60) and RAM size mapping nuances.
     private static final Logger LOGGER = Logger.getLogger(MBC1.class.getName());
     private static final int ROM_BANK_SIZE = 0x4000;
     private static final int RAM_BANK_SIZE = 0x2000;
 
-    private int romBankLow = 1;   // 5-bit ROM bank register (0x2000-0x3FFF)
-    private int bankUpper = 0;    // 2-bit upper bank register (0x4000-0x5FFF)
+    private int romBankLow = 1; // 5-bit ROM bank register (0x2000-0x3FFF)
+    private int bankUpper = 0; // 2-bit upper bank register (0x4000-0x5FFF)
     private boolean ramEnabled = false;
     private boolean bankingMode = false; // false: mode 0 (ROM), true: mode 1 (RAM/advanced)
 
@@ -34,28 +33,34 @@ public class MBC1 extends Cartridge {
 
     private static boolean detectMulticart(byte[] data) {
         // MBC1M multicart: 1MB ROM with valid Nintendo logos at 256KB boundaries
-        if (data.length < 0x100000) return false; // Must be at least 1MB
+        if (data.length < 0x100000)
+            return false; // Must be at least 1MB
         // Check for Nintendo logo at each 256KB (0x40000) boundary
         byte[] logo = new byte[0x30];
         System.arraycopy(data, 0x0104, logo, 0, Math.min(0x30, data.length - 0x0104));
         int matches = 0;
         for (int slot = 1; slot <= 3; slot++) {
             int base = slot * 0x40000;
-            if (base + 0x134 > data.length) break;
+            if (base + 0x134 > data.length)
+                break;
             boolean match = true;
             for (int i = 0; i < 0x30 && match; i++) {
-                if (data[base + 0x0104 + i] != logo[i]) match = false;
+                if (data[base + 0x0104 + i] != logo[i])
+                    match = false;
             }
-            if (match) matches++;
+            if (match)
+                matches++;
         }
         return matches >= 1;
     }
 
     private int getRamSize(byte ramSizeType) {
         return switch (ramSizeType) {
-            case 0x01 -> 2 * 1024;   // 2KB
-            case 0x02 -> 8 * 1024;   // 8KB
-            case 0x03 -> 32 * 1024;  // 32KB
+            case 0x01 -> 2 * 1024; // 2KB
+            case 0x02 -> 8 * 1024; // 8KB
+            case 0x03 -> 32 * 1024; // 32KB
+            case 0x04 -> 128 * 1024; // 128KB
+            case 0x05 -> 64 * 1024; // 64KB
             default -> 0;
         };
     }
@@ -74,7 +79,8 @@ public class MBC1 extends Cartridge {
             // ROM bank 0 area
             // In mode 1: upper bank bits affect which bank appears in 0x0000-0x3FFF
             int bank = bankingMode ? (bankUpper << upperShift()) : 0;
-            int index = (bank * ROM_BANK_SIZE + address) % data.length;
+            bank = normalizeRomBank(bank);
+            int index = bank * ROM_BANK_SIZE + address;
             return data[index];
         } else if (address >= 0x4000 && address < 0x8000) {
             // Switchable ROM bank area
@@ -88,7 +94,8 @@ public class MBC1 extends Cartridge {
             if (romBankLow == 0) {
                 bank = (bankUpper << upperShift()) | 1;
             }
-            int index = (bank * ROM_BANK_SIZE + (address - 0x4000)) % data.length;
+            bank = normalizeRomBank(bank);
+            int index = bank * ROM_BANK_SIZE + (address - 0x4000);
             return data[index];
         } else if (address >= 0xA000 && address < 0xC000) {
             if (!ramEnabled || ram == null || ramBankCount == 0) {
@@ -97,10 +104,19 @@ public class MBC1 extends Cartridge {
             // In mode 1: upper bank bits select RAM bank
             int bank = bankingMode ? (bankUpper % ramBankCount) : 0;
             int index = bank * RAM_BANK_SIZE + (address - 0xA000);
-            if (index >= ram.length) return (byte) 0xFF;
+            if (index >= ram.length)
+                return (byte) 0xFF;
             return ram[index];
         }
         return (byte) 0xFF;
+    }
+
+    private int normalizeRomBank(int bank) {
+        if (romBankCount <= 0) {
+            return 0;
+        }
+        int normalized = bank % romBankCount;
+        return normalized < 0 ? normalized + romBankCount : normalized;
     }
 
     @Override
@@ -119,10 +135,12 @@ public class MBC1 extends Cartridge {
             // Banking mode select
             bankingMode = ((value & 0x01) == 0x01);
         } else if (address >= 0xA000 && address < 0xC000) {
-            if (!ramEnabled || ram == null || ramBankCount == 0) return;
+            if (!ramEnabled || ram == null || ramBankCount == 0)
+                return;
             int bank = bankingMode ? (bankUpper % ramBankCount) : 0;
             int index = bank * RAM_BANK_SIZE + (address - 0xA000);
-            if (index >= ram.length) return;
+            if (index >= ram.length)
+                return;
             ram[index] = value;
         }
     }

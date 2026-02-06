@@ -11,8 +11,6 @@ import gbc.model.event.EventBus;
  * Manages the 16-bit divider, TIMA, TMA, TAC and overflow/reload state machine.
  */
 public class Timer {
-    // TODO: Verify DIV/TIMA behavior on TAC writes, overflow reload timing, and
-    // double-speed edge cases.
     private static final Logger LOGGER = Logger.getLogger(Timer.class.getName());
 
     private final EventBus eventBus;

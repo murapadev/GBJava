@@ -149,7 +149,9 @@ public class LcdController {
             // LCD is off: LY stays at 0, mode stays HBlank.
             // Hardware keeps the LYC flag latched while LCD is off.
             // LY reads as 0, but the coincidence flag is not continuously updated.
-            // TODO: Confirm STAT/LY behavior immediately after LCD off/on toggles.
+            // When LCD is re-enabled (bit 7 set), a startup delay is applied
+            // (see handleLcdcWrite) during which LY=0 and mode=HBlank are held.
+            // After the delay, mode transitions to OAM (mode 2) for line 0.
             return;
         }
         if (lcdEnableDelay > 0) {

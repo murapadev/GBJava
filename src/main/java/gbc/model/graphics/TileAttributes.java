@@ -1,11 +1,28 @@
 package gbc.model.graphics;
 
 /**
- * Tile attributes for Game Boy Color background and window tiles.
- * Contains palette, flip flags, and priority information.
+ * Tile attributes for Game Boy Color background, window, and sprite tiles.
+ *
+ * <h3>Priority Bit Interactions (CGB)</h3>
+ * <p>Bit 7 has different meanings depending on context:
+ * <ul>
+ *   <li><b>BG/Window tiles:</b> When set, this BG tile has priority over all sprites
+ *       regardless of sprite OAM priority — but only if LCDC bit 0 is set (master
+ *       BG priority enabled).</li>
+ *   <li><b>Sprite (OBJ) tiles:</b> When set, the sprite renders behind BG colors 1-3
+ *       (but still shows over BG color 0). This is the "OBJ-to-BG priority" flag.</li>
+ * </ul>
+ *
+ * <p>Resolution order in CGB mode (see {@link CgbPixelFifo}):
+ * <ol>
+ *   <li>LCDC bit 0 off → sprites always visible</li>
+ *   <li>BG color 0 → sprite always visible</li>
+ *   <li>BG priority attribute set → BG wins</li>
+ *   <li>OBJ priority attribute set → BG wins if non-zero</li>
+ *   <li>Otherwise → sprite wins</li>
+ * </ol>
  */
 public class TileAttributes {
-    // TODO: Validate priority bit interactions (CGB BG priority vs OBJ priority rules).
     private final int rawValue;
     private final int palette; // CGB palette number (0-7)
     private final int vramBank; // VRAM bank (0-1) for CGB tiles

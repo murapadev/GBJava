@@ -24,9 +24,8 @@ public final class AudioEngine implements AutoCloseable {
     private static final Logger LOGGER = Logger.getLogger(AudioEngine.class.getName());
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean paused = new AtomicBoolean(false);
-    private static final boolean AUDIO_DEBUG = Boolean.getBoolean("gbc.audio.debug");
-    private static final boolean AUDIO_TEST_TONE = Boolean.getBoolean("gbc.audio.testTone");
-    private static final String AUDIO_MIXER = System.getProperty("gbc.audio.mixer");
+    private volatile boolean audioDebug = Boolean.getBoolean("gbc.audio.debug");
+    private volatile boolean audioTestTone = Boolean.getBoolean("gbc.audio.testTone");
 
     private ExecutorService executor;
     private Future<?> worker;
@@ -42,13 +41,19 @@ public final class AudioEngine implements AutoCloseable {
     private long lastBufferLogNs;
     private double testPhase;
     private static final double TEST_FREQ = 440.0;
-    private final int sampleRate;
-    private final int bufferSize;
+    private int sampleRate;
+    private int bufferSize;
     private volatile int lastAvailableBytes;
     private volatile long lastWriteNs;
 
     public AudioEngine() {
-        this.sampleRate = Integer.getInteger("audio.sampleRate", 44_100);
+        readSettings();
+    }
+
+    private void readSettings() {
+        this.audioDebug = Boolean.parseBoolean(System.getProperty("gbc.audio.debug", "false"));
+        this.audioTestTone = Boolean.parseBoolean(System.getProperty("gbc.audio.testTone", "false"));
+        this.sampleRate = Math.max(8000, Integer.getInteger("audio.sampleRate", 44_100));
         Integer configuredBuffer = Integer.getInteger("audio.bufferSize", 4096);
         Integer latencyMs = Integer.getInteger("audio.latencyMs", 0);
         if (configuredBuffer != null && configuredBuffer > 0) {
@@ -61,8 +66,18 @@ public final class AudioEngine implements AutoCloseable {
         }
     }
 
+    /**
+     * Stops the current audio output, re-reads all audio settings from system
+     * properties, and restarts playback. Safe to call from any thread.
+     */
+    public synchronized void restart(GameBoyColor gbc) {
+        stop();
+        readSettings();
+        start(gbc);
+    }
+
     private void logDebug(String message, Throwable error) {
-        if (!AUDIO_DEBUG) {
+        if (!audioDebug) {
             return;
         }
         try {
@@ -90,6 +105,7 @@ public final class AudioEngine implements AutoCloseable {
         if (running.get()) {
             return;
         }
+        readSettings();
 
         if (executor == null || executor.isShutdown()) {
             executor = Executors.newSingleThreadExecutor(new AudioThreadFactory());
@@ -162,7 +178,7 @@ public final class AudioEngine implements AutoCloseable {
 
                 if (gbc.isAudioBufferFull()) {
                     byte[] samples = gbc.fetchAudioSamples();
-                    if (AUDIO_TEST_TONE) {
+                    if (audioTestTone) {
                         writeTestTone();
                         continue;
                     }
@@ -174,7 +190,7 @@ public final class AudioEngine implements AutoCloseable {
                         lastAvailableBytes = line.available();
                         buffersWritten++;
                         long now = System.nanoTime();
-                        if (AUDIO_DEBUG && now - lastBufferLogNs > TimeUnit.SECONDS.toNanos(2)) {
+                        if (audioDebug && now - lastBufferLogNs > TimeUnit.SECONDS.toNanos(2)) {
                             lastBufferLogNs = now;
                             logDebug("AudioEngine buffers written: " + buffersWritten, null);
                         }
@@ -272,16 +288,17 @@ public final class AudioEngine implements AutoCloseable {
     }
 
     private javax.sound.sampled.Mixer resolveMixer() {
-        if (AUDIO_MIXER == null || AUDIO_MIXER.isBlank()) {
+        String mixerName = System.getProperty("gbc.audio.mixer", "");
+        if (mixerName == null || mixerName.isBlank()) {
             return null;
         }
-        if ("system".equalsIgnoreCase(AUDIO_MIXER)) {
+        if ("system".equalsIgnoreCase(mixerName)) {
             return null;
         }
         for (javax.sound.sampled.Mixer.Info info : AudioSystem.getMixerInfo()) {
-            if (info.getName().equalsIgnoreCase(AUDIO_MIXER)
-                    || info.getName().toLowerCase().contains(AUDIO_MIXER.toLowerCase())
-                    || info.getDescription().toLowerCase().contains(AUDIO_MIXER.toLowerCase())) {
+            if (info.getName().equalsIgnoreCase(mixerName)
+                    || info.getName().toLowerCase().contains(mixerName.toLowerCase())
+                    || info.getDescription().toLowerCase().contains(mixerName.toLowerCase())) {
                 return AudioSystem.getMixer(info);
             }
         }
@@ -439,7 +456,7 @@ public final class AudioEngine implements AutoCloseable {
     }
 
     private void logAvailableMixers() {
-        if (!AUDIO_DEBUG) {
+        if (!audioDebug) {
             return;
         }
         StringBuilder sb = new StringBuilder("Available mixers:\n");

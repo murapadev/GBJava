@@ -2,9 +2,25 @@ package gbc.model.input;
 
 import gbc.model.cpu.Interruptions;
 
+/**
+ * Game Boy joypad controller.
+ *
+ * <h3>Select-line behavior</h3>
+ * <p>The joypad register (FF00) uses active-low logic. P14 (bit 4) selects
+ * the direction button group, P15 (bit 5) selects the action button group.
+ * When both lines are selected (both bits low), the button states from both
+ * groups are OR'd together, causing "ghosting" — pressing certain button
+ * combinations can produce phantom readings.
+ *
+ * <h3>Interrupt edges</h3>
+ * <p>A joypad interrupt (IF bit 4) is requested on any high-to-low transition
+ * of the lower nibble (bits 0-3) of the joypad register. This can occur when:
+ * <ul>
+ *   <li>A button is pressed while its group is selected</li>
+ *   <li>The select lines are changed to reveal a pressed button</li>
+ * </ul>
+ */
 public class Controller {
-	// TODO: Emulate joypad select-line behavior/interrupt edges (P14/P15 combos,
-	// ghosting).
 	private Interruptions interruptions; // For interrupt handling
 
 	// Game Boy button states
@@ -41,29 +57,32 @@ public class Controller {
 		if (!selectAction)
 			value &= ~(1 << 5); // P15 = 0
 
-		// Set button bits (active low)
-		if (!selectDirection) {
-			// Direction buttons
+		// When a select line is active (low), the corresponding buttons are readable.
+		// When both lines are active, button states from both groups are OR'd,
+		// causing ghosting artifacts on real hardware.
+		boolean readDirections = !selectDirection;
+		boolean readActions = !selectAction;
+
+		if (readDirections) {
 			if (down)
-				value &= ~(1 << 3); // Down
+				value &= ~(1 << 3);
 			if (up)
-				value &= ~(1 << 2); // Up
+				value &= ~(1 << 2);
 			if (left)
-				value &= ~(1 << 1); // Left
+				value &= ~(1 << 1);
 			if (right)
-				value &= ~(1 << 0); // Right
+				value &= ~(1 << 0);
 		}
 
-		if (!selectAction) {
-			// Action buttons
+		if (readActions) {
 			if (start)
-				value &= ~(1 << 3); // Start
+				value &= ~(1 << 3);
 			if (select)
-				value &= ~(1 << 2); // Select
+				value &= ~(1 << 2);
 			if (b)
-				value &= ~(1 << 1); // B
+				value &= ~(1 << 1);
 			if (a)
-				value &= ~(1 << 0); // A
+				value &= ~(1 << 0);
 		}
 
 		return value;

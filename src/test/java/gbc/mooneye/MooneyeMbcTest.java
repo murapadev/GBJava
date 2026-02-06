@@ -17,18 +17,19 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import gbc.controller.io.RomLoader;
 import gbc.model.GameBoyColor;
 import gbc.model.HardwareType;
-import gbc.model.cpu.Registers;
-import gbc.model.memory.Memory;
-import gbc.controller.io.RomLoader;
 import gbc.model.cartridge.Cartridge;
+import gbc.model.cpu.Registers;
 
 /**
  * Test harness for Mooneye emulator-only MBC (Memory Bank Controller) tests.
- * These tests validate correct behavior of MBC1, MBC2, and MBC5 cartridge mappers.
+ * These tests validate correct behavior of MBC1, MBC2, and MBC5 cartridge
+ * mappers.
  * <p>
- * Pass/fail detection uses the same Fibonacci register convention as Mooneye acceptance tests.
+ * Pass/fail detection uses the same Fibonacci register convention as Mooneye
+ * acceptance tests.
  */
 class MooneyeMbcTest {
 
@@ -92,11 +93,14 @@ class MooneyeMbcTest {
 
     private static Path locateMooneyeRoot() {
         Path candidate = Paths.get("..", "mooneye-test-suite");
-        if (Files.isDirectory(candidate)) return candidate.normalize();
+        if (Files.isDirectory(candidate))
+            return candidate.normalize();
         Path alt = Paths.get("mooneye-test-suite");
-        if (Files.isDirectory(alt)) return alt.normalize();
+        if (Files.isDirectory(alt))
+            return alt.normalize();
         Path samples = Paths.get("samples", "roms", "mooneye-test-suite");
-        if (Files.isDirectory(samples)) return samples.normalize();
+        if (Files.isDirectory(samples))
+            return samples.normalize();
         throw new IllegalStateException("Cannot locate mooneye-test-suite directory");
     }
 
@@ -138,7 +142,7 @@ class MooneyeMbcTest {
 
             Assertions.fail(String.format(
                     "Mooneye MBC test did not pass: %s\ncycles=%d, instructions=%d\n" +
-                    "B=%02X C=%02X D=%02X E=%02X H=%02X L=%02X PC=%04X",
+                            "B=%02X C=%02X D=%02X E=%02X H=%02X L=%02X PC=%04X",
                     displayName, cycles, instructions,
                     registers.getRegister("B") & 0xFF,
                     registers.getRegister("C") & 0xFF,

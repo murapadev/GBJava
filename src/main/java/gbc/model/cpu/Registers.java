@@ -1,7 +1,6 @@
 package gbc.model.cpu;
 
 public class Registers {
-	// TODO: Include CGB-in-DMG initial registers and header/boot-variant differences.
 	private byte A, B, C, D, E, F, H, L;
 	private int PC, SP;
 
@@ -91,16 +90,23 @@ public class Registers {
 
 	public void reset() {
 		// Default to DMG reset
-		reset(gbc.model.HardwareType.DMG);
+		reset(gbc.model.HardwareType.DMG, false);
 	}
-	
+
 	/**
 	 * Reset registers to post-boot ROM state for the specified hardware type.
 	 * Different hardware variants have different initial register values.
 	 * Values from https://gbdev.io/pandocs/Power_Up_Sequence.html
 	 */
 	public void reset(gbc.model.HardwareType hardwareType) {
+		reset(hardwareType, false);
+	}
+
+	public void reset(gbc.model.HardwareType hardwareType, boolean dmgOnCgb) {
 		gbc.model.HardwareType hw = hardwareType == null ? gbc.model.HardwareType.DMG : hardwareType;
+		if (dmgOnCgb && hw.isCgb()) {
+			hw = gbc.model.HardwareType.DMG;
+		}
 		gbc.model.HardwareType.CpuInitState state = hw.getCpuInitState();
 		A = (byte) state.a();
 		F = (byte) (state.f() & 0xF0);

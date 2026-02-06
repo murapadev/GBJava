@@ -5,7 +5,6 @@ package gbc.model.sound;
  * Handles automatic frequency changes over time
  */
 public class Sweep {
-    // TODO: Emulate sweep overflow/negate quirks and shadow frequency timing precisely.
     private int shadowFrequency;
     private int timer;
     private int period;
@@ -13,6 +12,7 @@ public class Sweep {
     private int frequency;
     private int shift;
     private boolean decrementing;
+    private boolean negateUsed;
     private final Runnable disableChannel;
 
     public Sweep(Runnable disableChannel) {
@@ -45,6 +45,9 @@ public class Sweep {
 
         if (decrementing) {
             newFrequency = shadowFrequency - newFrequency;
+            if (shift > 0) {
+                negateUsed = true;
+            }
         } else {
             newFrequency = shadowFrequency + newFrequency;
         }
@@ -52,6 +55,7 @@ public class Sweep {
         // Check for overflow
         if (newFrequency > 2047) {
             disableChannel.run();
+            enabled = false;
         }
 
         return newFrequency;
@@ -66,6 +70,7 @@ public class Sweep {
         this.frequency = frequency;
         timer = period > 0 ? period : 8;
         enabled = period > 0 || shift > 0;
+        negateUsed = false;
         if (shift > 0) {
             calculateFrequency();
         }
@@ -87,9 +92,14 @@ public class Sweep {
         if (address != 0xFF10) {
             throw new RuntimeException("Invalid address");
         }
-
+        boolean wasDecrementing = decrementing;
         decrementing = (value & 0b1000) > 0;
         period = (value & 0b1110000) >>> 4;
         shift = value & 0b111;
+        enabled = period > 0 || shift > 0;
+        if (wasDecrementing && !decrementing && negateUsed) {
+            disableChannel.run();
+            enabled = false;
+        }
     }
 }

@@ -7,8 +7,6 @@ import gbc.model.memory.Memory;
 import gbc.model.trace.TraceGenerator;
 
 public class CPU {
-    // TODO: Audit STOP/HALT/IME timing and CGB speed-switch side effects for cycle
-    // accuracy.
     private static final Logger LOGGER = Logger.getLogger(CPU.class.getName());
     private static final boolean DEBUG_LOG = Boolean.getBoolean("gbc.cpu.debug");
 
@@ -42,6 +40,7 @@ public class CPU {
     // HALT state
     private boolean halted = false;
     private boolean haltBugTriggered = false;
+    private boolean stopped = false;
 
     // M-cycle interleaving: tracks cycles consumed by memory access callbacks
     private int mcycleCallbackCycles;
@@ -63,7 +62,7 @@ public class CPU {
     public CPU(Memory memory) {
         this.memory = memory;
         this.registers = new Registers();
-        this.interruptions = new Interruptions(memory, registers, this);
+        this.interruptions = new Interruptions(memory);
         this.opcodeLog = new StringBuilder();
         this.operationsLoader = new OperationsLoader(interruptions, this);
 
@@ -117,7 +116,8 @@ public class CPU {
     public void reset() {
         // Reset with hardware-specific values from Memory
         gbc.model.HardwareType hwType = memory.getHardwareType();
-        registers.reset(hwType);
+        boolean dmgOnCgb = memory.isDmgOnCgb() && memory.isCartridgeLoaded();
+        registers.reset(hwType, dmgOnCgb);
         memory.reset();
         interruptions.reset();
         cycles = 0;
@@ -132,6 +132,7 @@ public class CPU {
         imeEnableDelay = 0;
         halted = false;
         haltBugTriggered = false;
+        stopped = false;
         lastConditionTaken = false;
         interruptDispatchState = 0;
     }
@@ -140,6 +141,13 @@ public class CPU {
         // Don't execute if no cartridge is loaded
         if (!isCartridgeLoaded()) {
             return 0;
+        }
+
+        if (stopped) {
+            if (!shouldExitStop()) {
+                return 0;
+            }
+            stopped = false;
         }
 
         int interruptCycles = handleInterrupts();
@@ -203,7 +211,7 @@ public class CPU {
             cachedOperation = operation;
 
             if (operation != null) {
-                operation.perform(registers, memory);
+                operation.perform(registers, memory, this);
             } else {
                 final int finalCbOpcode = cbOpcode;
                 LOGGER.log(Level.SEVERE, () -> String.format("No %s operation found for opcode 0x%02X at PC=0x%04X",
@@ -559,6 +567,14 @@ public class CPU {
         this.haltBugTriggered = haltBugTriggered;
     }
 
+    public boolean isStopped() {
+        return stopped;
+    }
+
+    public void setStopped(boolean stopped) {
+        this.stopped = stopped;
+    }
+
     public void step(int tCycles) {
         stepPeripheralsForCpuCycles(tCycles);
         this.cycles += tCycles;
@@ -571,6 +587,11 @@ public class CPU {
                 ime = true;
             }
         }
+    }
+
+    private boolean shouldExitStop() {
+        int iflags = memory.peekByte(0xFF0F) & 0x1F;
+        return iflags != 0;
     }
 
     // Other methods...

@@ -1,12 +1,19 @@
 package gbc.model.sound;
 
 /**
- * Noise channel (channel 4) for Game Boy APU
- * Generates pseudo-random noise using LFSR
+ * Noise channel (channel 4) for Game Boy APU.
+ * Generates pseudo-random noise using a 15-bit or 7-bit LFSR.
+ *
+ * <p>
+ * LFSR behavior: On each clock, bits 0 and 1 are XORed. The result is
+ * shifted into bit 14 (and also bit 6 in 7-bit width mode, set via NR43 bit 3).
+ * The output is the complement of bit 0.
+ *
+ * <p>
+ * Envelope: period 0 is treated as 8 internally (matches hardware).
+ * Volume envelope ticks on frame sequencer step 7.
  */
 public class NoiseChannel {
-    // TODO: Validate LFSR timing/width mode and envelope behavior against hardware
-    // tests.
     private final float[] samples = new float[2];
     private int polynomialRegister;
     private int lengthCounter;
@@ -22,6 +29,12 @@ public class NoiseChannel {
     private int frequencyTimer;
     // Cached current sample
     private float currentSample;
+    // Frame sequencer step (0-7), updated by APU
+    private int frameSequencerStep;
+
+    private int getEffectiveEnvelopePeriod() {
+        return period == 0 ? 8 : period;
+    }
 
     public float[] step(boolean stepLength, boolean stepEnvelope) {
         // Step timing systems
@@ -102,20 +115,26 @@ public class NoiseChannel {
         }
     }
 
+    /**
+     * Update the frame sequencer step, called by APU each frame sequencer tick.
+     * Used for length counter extra-clocking quirk on NR44 writes.
+     */
+    public void setFrameSequencerStep(int step) {
+        this.frameSequencerStep = step;
+    }
+
     /** Step envelope (called by frame sequencer) */
     public void stepEnvelope() {
-        if (period != 0) {
-            if (periodTimer > 0) {
-                periodTimer--;
-            }
-            if (periodTimer == 0) {
-                periodTimer = period;
-                if (volume < 0xF && incrementing || volume > 0 && !incrementing) {
-                    if (incrementing) {
-                        volume++;
-                    } else {
-                        volume--;
-                    }
+        if (periodTimer > 0) {
+            periodTimer--;
+        }
+        if (periodTimer == 0) {
+            periodTimer = getEffectiveEnvelopePeriod();
+            if (volume < 0xF && incrementing || volume > 0 && !incrementing) {
+                if (incrementing) {
+                    volume++;
+                } else {
+                    volume--;
                 }
             }
         }
@@ -163,6 +182,7 @@ public class NoiseChannel {
             incrementing = (value & 0x08) != 0;
             initialVolume = value >>> 4;
             period = value & 0x07;
+            periodTimer = getEffectiveEnvelopePeriod();
             dacOn = (value & 0b1111_1000) != 0;
 
             if (!dacOn) {
@@ -175,17 +195,32 @@ public class NoiseChannel {
             return;
         }
         if (address == 0xFF23) {
+            boolean wasLengthEnabled = lengthEnabled;
             lengthEnabled = (value >>> 6 & 0b1) != 0;
             boolean trigger = (value >>> 7) != 0;
-            if (trigger && dacOn) {
-                enabled = true;
+
+            // Extra length clocking quirk: when length enable transitions 0→1
+            // on an odd frame sequencer step, extra decrement occurs.
+            boolean onNonLengthStep = (frameSequencerStep & 1) != 0;
+            if (!wasLengthEnabled && lengthEnabled && onNonLengthStep && lengthCounter > 0) {
+                lengthCounter--;
+                if (lengthCounter == 0 && !trigger) {
+                    enabled = false;
+                }
             }
+
             if (trigger) {
                 if (lengthCounter == 0) {
                     lengthCounter = 64;
+                    if (lengthEnabled && onNonLengthStep) {
+                        lengthCounter--;
+                    }
+                }
+                if (dacOn) {
+                    enabled = true;
                 }
                 lfsr = 0x7FFF;
-                periodTimer = period;
+                periodTimer = getEffectiveEnvelopePeriod();
                 volume = initialVolume;
                 frequencyTimer = calculateFrequencyTimer();
             }

@@ -2,9 +2,9 @@ package gbc.model.graphics;
 
 /**
  * Simple integer queue implementation for pixel FIFO.
+ * Provides both throwing and non-throwing dequeue variants.
  */
 public class IntQueue {
-    // TODO: Consider a non-throwing dequeue for PPU hot paths to reduce exception overhead.
     private final int[] data;
     private int head;
     private int tail;
@@ -29,6 +29,21 @@ public class IntQueue {
     public int dequeue() {
         if (size == 0) {
             throw new IllegalStateException("Queue is empty");
+        }
+        int value = data[head];
+        head = (head + 1) % data.length;
+        size--;
+        return value;
+    }
+
+    /**
+     * Dequeue without throwing on empty queue.
+     * Returns defaultValue if the queue is empty.
+     * Preferred for PPU hot paths to avoid exception overhead.
+     */
+    public int dequeueOrDefault(int defaultValue) {
+        if (size == 0) {
+            return defaultValue;
         }
         int value = data[head];
         head = (head + 1) % data.length;

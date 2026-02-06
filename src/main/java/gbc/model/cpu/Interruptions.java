@@ -3,11 +3,7 @@ package gbc.model.cpu;
 import gbc.model.memory.Memory;
 
 public class Interruptions {
-    // TODO: Confirm IF/IE upper-bit behavior and interrupt priority/edge cases
-    // across hardware.
     private Memory memory;
-    private Registers registers;
-    private CPU cpu;
 
     private static final int ADDR_INTERRUPT_FLAG = 0xFF0F;
     private static final int ADDR_INTERRUPT_ENABLE = 0xFFFF;
@@ -18,15 +14,13 @@ public class Interruptions {
     private static final byte INTERRUPT_SERIAL = 0x08;
     private static final byte INTERRUPT_JOYPAD = 0x10;
 
-    public Interruptions(Memory memory, Registers registers, CPU cpu) {
+    public Interruptions(Memory memory) {
         this.memory = memory;
-        this.registers = registers;
-        this.cpu = cpu;
     }
 
     public void requestInterrupt(byte interrupt) {
-        byte currentFlags = (byte) memory.peekByte(ADDR_INTERRUPT_FLAG);
-        currentFlags |= interrupt;
+        byte currentFlags = (byte) (memory.peekByte(ADDR_INTERRUPT_FLAG) & 0x1F);
+        currentFlags = (byte) ((currentFlags | interrupt) & 0x1F);
         memory.writeByte(ADDR_INTERRUPT_FLAG, currentFlags);
     }
 
@@ -37,9 +31,9 @@ public class Interruptions {
     }
 
     public Integer getInterruptVector() {
-        int interruptFlag = memory.peekByte(ADDR_INTERRUPT_FLAG);
-        int interruptEnable = memory.peekByte(ADDR_INTERRUPT_ENABLE);
-        int interruptFired = interruptFlag & interruptEnable & 0x1F;
+        int interruptFlag = memory.peekByte(ADDR_INTERRUPT_FLAG) & 0x1F;
+        int interruptEnable = memory.peekByte(ADDR_INTERRUPT_ENABLE) & 0x1F;
+        int interruptFired = interruptFlag & interruptEnable;
 
         if ((interruptFired & INTERRUPT_VBLANK) != 0) {
             return 0x0040;
@@ -74,17 +68,17 @@ public class Interruptions {
                 interrupt = INTERRUPT_JOYPAD;
                 break;
         }
-        int currentFlags = memory.peekByte(ADDR_INTERRUPT_FLAG);
+        int currentFlags = memory.peekByte(ADDR_INTERRUPT_FLAG) & 0x1F;
         currentFlags &= ~interrupt;
-        memory.writeByte(ADDR_INTERRUPT_FLAG, (byte) currentFlags);
+        memory.writeByte(ADDR_INTERRUPT_FLAG, (byte) (currentFlags & 0x1F));
     }
 
     public void reset() {
     }
 
     public boolean hasPendingInterrupt() {
-        int interruptFlag = memory.peekByte(ADDR_INTERRUPT_FLAG);
-        int interruptEnable = memory.peekByte(ADDR_INTERRUPT_ENABLE);
-        return (interruptFlag & interruptEnable & 0x1F) != 0;
+        int interruptFlag = memory.peekByte(ADDR_INTERRUPT_FLAG) & 0x1F;
+        int interruptEnable = memory.peekByte(ADDR_INTERRUPT_ENABLE) & 0x1F;
+        return (interruptFlag & interruptEnable) != 0;
     }
 }

@@ -1,11 +1,17 @@
 package gbc.model.graphics;
 
 import gbc.model.memory.Memory;
-import java.util.Arrays;
 
 /**
  * OAM search phase - finds sprites that should be rendered on the current
  * scanline.
+ *
+ * <p>
+ * Hardware timing: The OAM scan runs for 80 T-cycles (mode 2), evaluating
+ * two OAM entries per M-cycle (4 T-cycles). Each entry is checked against the
+ * current LY to determine if the sprite intersects the scanline. Up to 10
+ * sprites are collected; additional sprites on the same line are ignored
+ * (sprite overflow behavior).
  */
 public class OamSearch {
     private final Memory memory;
@@ -14,6 +20,7 @@ public class OamSearch {
     private final int[] penaltySpriteX;
     private final int[] penaltySpriteOam;
     private int penaltySpriteCount;
+    private int totalSpriteCount;
     private int mode3Duration;
     private int latchedScx;
     private boolean scxLatched;
@@ -40,24 +47,31 @@ public class OamSearch {
 
         activeSpriteCount = 0;
         penaltySpriteCount = 0;
+        totalSpriteCount = 0;
+
         // Read LCDC register (0xFF40) to determine sprite enable/height
         int lcdc = memory.getLcdc() & 0xFF;
         boolean spritesEnabled = (lcdc & 0x02) != 0; // Bit 1: OBJ enable
         int spriteHeight = (lcdc & 0x04) != 0 ? 16 : 8; // Bit 2: 0=8x8, 1=8x16
 
         if (spritesEnabled) {
-            // Search through all 40 sprites in OAM
-            // TODO: Emulate OAM scan timing and the hardware sprite overflow behavior.
-            for (int i = 0; i < 40 && activeSpriteCount < 10; i++) {
-                int baseAddr = 0xFE00 + i * 4;
+            // OAM scan evaluates 2 entries per M-cycle (4 T-cycles) over 80 dots.
+            // Total: 40 entries scanned in 80 T-cycles.
+            // When 10 sprites are found, remaining entries are still scanned
+            // (important for sprite overflow flag behavior on DMG).
+            for (int i = 0; i < 40; i++) {
                 int yPos = (memory.getOamByte(i * 4) & 0xFF) - 16;
 
                 // Check if sprite intersects current scanline
                 if (ly >= yPos && ly < yPos + spriteHeight) {
+                    totalSpriteCount++;
+                    if (activeSpriteCount >= 10) {
+                        continue;
+                    }
                     int xPos = (memory.getOamByte(i * 4 + 1) & 0xFF) - 8;
                     int tileId = memory.getOamByte(i * 4 + 2) & 0xFF;
                     int attributes = memory.getOamByte(i * 4 + 3) & 0xFF;
-                    sprites[activeSpriteCount].enable(xPos, yPos, baseAddr, i, tileId, attributes);
+                    sprites[activeSpriteCount].enable(xPos, yPos, 0xFE00 + i * 4, i, tileId, attributes);
                     penaltySpriteX[penaltySpriteCount] = xPos;
                     penaltySpriteOam[penaltySpriteCount] = i;
                     penaltySpriteCount++;
@@ -66,7 +80,8 @@ public class OamSearch {
             }
         }
 
-        // Latch SCX at the start of the scanline (mode 2) for timing/penalty calculations.
+        // Latch SCX at the start of the scanline (mode 2) for timing/penalty
+        // calculations.
         latchedScx = memory.getScx() & 0xFF;
         scxLatched = true;
     }
@@ -82,14 +97,22 @@ public class OamSearch {
     public SpritePosition[] getSprites() {
         return sprites;
     }
-    
+
     /**
      * Returns the number of sprites found on the current scanline.
      */
     public int getActiveSpriteCount() {
         return activeSpriteCount;
     }
-    
+
+    public int getTotalSpriteCount() {
+        return totalSpriteCount;
+    }
+
+    public boolean hasSpriteOverflow() {
+        return totalSpriteCount > 10;
+    }
+
     /**
      * Returns the calculated Mode 3 duration for the current scanline.
      * This varies based on SCX value and number of sprites.
@@ -147,7 +170,8 @@ public class OamSearch {
             return 0;
         }
         int penalty = 6;
-        // Hardware quirk: WX=0 with SCX misaligned can shorten the window start penalty by 1 dot.
+        // Hardware quirk: WX=0 with SCX misaligned can shorten the window start penalty
+        // by 1 dot.
         if ((memory.getWx() & 0xFF) == 0 && (scx & 0x07) != 0) {
             penalty--;
         }

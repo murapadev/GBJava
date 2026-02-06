@@ -4,7 +4,8 @@ import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * UI-facing controller contract so views depend on abstractions, not concrete controllers.
+ * UI-facing controller contract so views depend on abstractions, not concrete
+ * controllers.
  */
 public interface EmulatorActions {
     CompletableFuture<Void> loadRomAsync(String path);
@@ -34,4 +35,12 @@ public interface EmulatorActions {
     DiagnosticsService diagnostics();
 
     EmulatorStatusPublisher statusPublisher();
+
+    /** Restarts the audio engine, re-reading settings from system properties. */
+    void restartAudio();
+
+    /**
+     * Reloads input timing configuration (debounce, repeat delay/rate, min press).
+     */
+    void reloadInputConfig();
 }
