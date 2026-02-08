@@ -43,4 +43,10 @@ public interface EmulatorActions {
      * Reloads input timing configuration (debounce, repeat delay/rate, min press).
      */
     void reloadInputConfig();
+
+    /**
+     * Applies the given configuration, updating the centralized config, system
+     * properties, and all subsystems (audio, input, joystick).
+     */
+    void applyConfig(gbc.controller.config.EmulatorConfig config);
 }

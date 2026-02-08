@@ -3,9 +3,12 @@ package gbc.controller.input;
 import net.java.games.input.Component;
 import net.java.games.input.ControllerEnvironment;
 
+import gbc.controller.config.AppConfig;
+import gbc.controller.config.EmulatorConfig;
 import gbc.model.input.Controller;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -19,7 +22,8 @@ public class JoystickManager {
     private long lastRescanNs;
 
     public void start(Controller controller) {
-        if (!Boolean.parseBoolean(System.getProperty("input.joystick.enabled", "false"))) {
+        EmulatorConfig cfg = AppConfig.get().getConfig();
+        if (!cfg.isJoystickEnabled()) {
             return;
         }
         JInputNativeLoader.loadIfNeeded();
@@ -42,10 +46,12 @@ public class JoystickManager {
     }
 
     private void pollLoop(Controller controller) {
-        long pollDelayMs = Math.max(1, Long.getLong("input.joystick.pollMs", 5L));
         while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
-                if (!Boolean.parseBoolean(System.getProperty("input.joystick.enabled", "false"))) {
+                EmulatorConfig cfg = AppConfig.get().getConfig();
+                long pollDelayMs = Math.max(1, cfg.getJoystickPollMs());
+
+                if (!cfg.isJoystickEnabled()) {
                     Thread.sleep(50);
                     continue;
                 }
@@ -61,14 +67,12 @@ public class JoystickManager {
                     continue;
                 }
 
-                float deadzone = Math.max(0f, Math.min(0.95f,
-                        Float.parseFloat(System.getProperty("input.deadzone", "0.15"))));
+                float deadzone = Math.max(0f, Math.min(0.95f, (float) cfg.getDeadzone()));
 
                 boolean up = false, down = false, left = false, right = false;
                 boolean a = false, b = false, start = false, select = false;
 
-                boolean usePov = Boolean.parseBoolean(System.getProperty("input.joystick.pov", "true"));
-                if (usePov) {
+                if (cfg.isPovEnabled()) {
                     Component pov = device.getComponent(Component.Identifier.Axis.POV);
                     if (pov != null) {
                         float v = pov.getPollData();
@@ -81,10 +85,13 @@ public class JoystickManager {
                     }
                 }
 
-                Component xAxis = findAxis(device, System.getProperty("input.joystick.axis.x", "x"));
-                Component yAxis = findAxis(device, System.getProperty("input.joystick.axis.y", "y"));
+                Component xAxis = findAxis(device, cfg.getAxisX());
+                Component yAxis = findAxis(device, cfg.getAxisY());
+                boolean invertX = cfg.isAxisXInverted();
+                boolean invertY = cfg.isAxisYInverted();
                 if (xAxis != null) {
                     float x = xAxis.getPollData();
+                    if (invertX) x = -x;
                     if (Math.abs(x) > deadzone) {
                         if (x < 0) left = true;
                         if (x > 0) right = true;
@@ -92,16 +99,18 @@ public class JoystickManager {
                 }
                 if (yAxis != null) {
                     float y = yAxis.getPollData();
+                    if (invertY) y = -y;
                     if (Math.abs(y) > deadzone) {
                         if (y < 0) up = true;
                         if (y > 0) down = true;
                     }
                 }
 
-                a = isButtonPressed(device, System.getProperty("input.joystick.button.a", "0"));
-                b = isButtonPressed(device, System.getProperty("input.joystick.button.b", "1"));
-                start = isButtonPressed(device, System.getProperty("input.joystick.button.start", "7"));
-                select = isButtonPressed(device, System.getProperty("input.joystick.button.select", "6"));
+                Map<String, String> buttons = cfg.getJoystickButtons();
+                a = isButtonPressed(device, buttons.getOrDefault("input.joystick.button.a", "0"));
+                b = isButtonPressed(device, buttons.getOrDefault("input.joystick.button.b", "1"));
+                start = isButtonPressed(device, buttons.getOrDefault("input.joystick.button.start", "7"));
+                select = isButtonPressed(device, buttons.getOrDefault("input.joystick.button.select", "6"));
 
                 controller.setUp(up);
                 controller.setDown(down);
@@ -137,7 +146,7 @@ public class JoystickManager {
             return;
         }
         lastRescanNs = now;
-        String hint = System.getProperty("input.joystick.device", "").toLowerCase(Locale.ROOT);
+        String hint = AppConfig.get().getConfig().getJoystickDevice().toLowerCase(Locale.ROOT);
         net.java.games.input.Controller[] controllers = ControllerEnvironment.getDefaultEnvironment().getControllers();
         net.java.games.input.Controller candidate = null;
         for (net.java.games.input.Controller c : controllers) {
@@ -168,7 +177,6 @@ public class JoystickManager {
                 System.setProperty("java.library.path", current + java.io.File.pathSeparator + path);
             }
         }
-        // Loading happens when JInput initializes; nothing else needed here.
     }
 
     private boolean isGamepad(net.java.games.input.Controller c) {

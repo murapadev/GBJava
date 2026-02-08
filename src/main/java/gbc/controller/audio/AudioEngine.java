@@ -14,6 +14,8 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
+import gbc.controller.config.AppConfig;
+import gbc.controller.config.EmulatorConfig;
 import gbc.model.GameBoyColor;
 
 /**
@@ -37,6 +39,7 @@ public final class AudioEngine implements AutoCloseable {
     private int outputChannels;
     private byte[] scratch16;
     private byte[] silenceBuffer;
+    private javax.sound.sampled.Mixer activeMixer;
     private long buffersWritten;
     private long lastBufferLogNs;
     private double testPhase;
@@ -51,14 +54,15 @@ public final class AudioEngine implements AutoCloseable {
     }
 
     private void readSettings() {
-        this.audioDebug = Boolean.parseBoolean(System.getProperty("gbc.audio.debug", "false"));
-        this.audioTestTone = Boolean.parseBoolean(System.getProperty("gbc.audio.testTone", "false"));
-        this.sampleRate = Math.max(8000, Integer.getInteger("audio.sampleRate", 44_100));
-        Integer configuredBuffer = Integer.getInteger("audio.bufferSize", 4096);
-        Integer latencyMs = Integer.getInteger("audio.latencyMs", 0);
-        if (configuredBuffer != null && configuredBuffer > 0) {
+        EmulatorConfig cfg = AppConfig.get().getConfig();
+        this.audioDebug = cfg.isAudioDebug();
+        this.audioTestTone = cfg.isTestTone();
+        this.sampleRate = Math.max(8000, cfg.getSampleRate());
+        int configuredBuffer = cfg.getAudioBufferSize();
+        int latencyMs = cfg.getLatencyMs();
+        if (configuredBuffer > 0) {
             this.bufferSize = configuredBuffer;
-        } else if (latencyMs != null && latencyMs > 0) {
+        } else if (latencyMs > 0) {
             int frames = Math.max(256, (int) ((sampleRate * latencyMs) / 1000.0));
             this.bufferSize = frames * 4; // 16-bit stereo bytes
         } else {
@@ -112,6 +116,7 @@ public final class AudioEngine implements AutoCloseable {
         }
 
         logAvailableMixers();
+        activeMixer = resolveMixer();
         try {
             AudioFormat selectedFormat = selectOutputFormat();
             line = openLineForFormat(selectedFormat);
@@ -244,51 +249,51 @@ public final class AudioEngine implements AutoCloseable {
     }
 
     private boolean isDisabled() {
-        boolean enabled = Boolean.parseBoolean(System.getProperty("audio.enabled", "true"));
-        boolean nullOut = Boolean.getBoolean("gbc.audio.nullOutput");
-        return !enabled || nullOut;
+        EmulatorConfig cfg = AppConfig.get().getConfig();
+        return !cfg.isAudioEnabled() || cfg.isNullOutput();
     }
 
     private AudioFormat selectOutputFormat() throws LineUnavailableException {
-        javax.sound.sampled.Mixer mixer = resolveMixer();
         AudioFormat[] candidates = buildCandidateFormats();
 
-        if (mixer != null) {
-            AudioFormat fromMixer = selectFormatFromMixer(mixer);
+        if (activeMixer != null) {
+            AudioFormat fromMixer = selectFormatFromMixer(activeMixer);
             if (fromMixer != null) {
                 return fromMixer;
             }
             for (AudioFormat format : candidates) {
                 javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(
                         SourceDataLine.class, format);
-                if (mixer.isLineSupported(info)) {
+                if (activeMixer.isLineSupported(info)) {
                     return format;
                 }
             }
-        } else {
-            for (AudioFormat format : candidates) {
-                javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(
-                        SourceDataLine.class, format);
-                if (AudioSystem.isLineSupported(info)) {
-                    return format;
-                }
+            // Configured mixer doesn't support any output format — fall back to system default
+            LOGGER.warning("Configured mixer does not support any output format, falling back to system default");
+            activeMixer = null;
+        }
+
+        for (AudioFormat format : candidates) {
+            javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(
+                    SourceDataLine.class, format);
+            if (AudioSystem.isLineSupported(info)) {
+                return format;
             }
         }
         throw new LineUnavailableException("No compatible audio output format found");
     }
 
     private SourceDataLine openLineForFormat(AudioFormat format) throws LineUnavailableException {
-        javax.sound.sampled.Mixer mixer = resolveMixer();
-        if (mixer != null) {
+        if (activeMixer != null) {
             javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(
                     SourceDataLine.class, format);
-            return (SourceDataLine) mixer.getLine(info);
+            return (SourceDataLine) activeMixer.getLine(info);
         }
         return AudioSystem.getSourceDataLine(format);
     }
 
     private javax.sound.sampled.Mixer resolveMixer() {
-        String mixerName = System.getProperty("gbc.audio.mixer", "");
+        String mixerName = AppConfig.get().getConfig().getMixer();
         if (mixerName == null || mixerName.isBlank()) {
             return null;
         }

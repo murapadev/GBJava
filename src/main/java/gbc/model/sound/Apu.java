@@ -28,6 +28,7 @@ public class Apu {
     private float leftVolumeFactor, rightVolumeFactor;
 
     private final byte[][] buffers;
+    private final byte[] stagingBuffer;
     private final byte[] outputBuffer;
     private final int bufferSize;
     private int bufferPosition;
@@ -52,6 +53,7 @@ public class Apu {
     // Sample cache - avoid recalculating when audio state hasn't changed
     private float cachedLeftSample;
     private float cachedRightSample;
+    private boolean cachedIsSilent;
     private boolean sampleCacheDirty = true;
     private static final boolean AUDIO_DEBUG = Boolean.getBoolean("gbc.audio.debug");
     private boolean loggedEnable;
@@ -87,6 +89,7 @@ public class Apu {
         this.bufferSize = safeSize;
         int bufferCount = Math.max(2, Integer.getInteger("audio.bufferCount", 4));
         this.buffers = new byte[bufferCount][bufferSize];
+        this.stagingBuffer = new byte[bufferSize];
         this.outputBuffer = new byte[bufferSize];
         this.useDcFilter = Boolean.parseBoolean(System.getProperty("audio.dcFilter", "true"));
         this.hpfCoeff = clamp(Float.parseFloat(System.getProperty("audio.dcFilterCoeff", "0.995")), 0.90f, 0.9999f);
@@ -190,6 +193,9 @@ public class Apu {
             float ch3 = channel3.getCurrentSample();
             float ch4 = channel4.getCurrentSample();
 
+            // Detect if all channels are producing zero output
+            boolean allChannelsSilent = (ch1 == 0f && ch2 == 0f && ch3 == 0f && ch4 == 0f);
+
             float left = (ch1Left ? ch1 : 0f) + (ch2Left ? ch2 : 0f) +
                     (ch3Left ? ch3 : 0f) + (ch4Left ? ch4 : 0f);
             float right = (ch1Right ? ch1 : 0f) + (ch2Right ? ch2 : 0f) +
@@ -197,23 +203,31 @@ public class Apu {
 
             cachedLeftSample = left * 0.25f * leftVolumeFactor;
             cachedRightSample = right * 0.25f * rightVolumeFactor;
+            cachedIsSilent = allChannelsSilent || (cachedLeftSample == 0f && cachedRightSample == 0f);
             sampleCacheDirty = false;
         }
 
-        float leftSample = cachedLeftSample * (cgbMode ? cgbMixGain : dmgMixGain);
-        float rightSample = cachedRightSample * (cgbMode ? cgbMixGain : dmgMixGain);
-        if (useDcFilter) {
-            leftSample = applyHighPassFilter(leftSample, true);
-            rightSample = applyHighPassFilter(rightSample, false);
+        // Output true silence when all channels are silent to avoid DC filter noise
+        if (cachedIsSilent) {
+            stagingBuffer[bufferPosition++] = (byte) 128;  // Silence for unsigned 8-bit audio
+            stagingBuffer[bufferPosition++] = (byte) 128;
+            // Reset DC filter state to prevent artifacts when audio resumes
+            resetDcFilter();
+        } else {
+            float leftSample = cachedLeftSample * (cgbMode ? cgbMixGain : dmgMixGain);
+            float rightSample = cachedRightSample * (cgbMode ? cgbMixGain : dmgMixGain);
+            if (useDcFilter) {
+                leftSample = applyHighPassFilter(leftSample, true);
+                rightSample = applyHighPassFilter(rightSample, false);
+            }
+            leftSample = clamp(leftSample, -1f, 1f);
+            rightSample = clamp(rightSample, -1f, 1f);
+
+            stagingBuffer[bufferPosition++] = (byte) (128 + Math.round(leftSample * 127f));
+            stagingBuffer[bufferPosition++] = (byte) (128 + Math.round(rightSample * 127f));
         }
-        leftSample = clamp(leftSample, -1f, 1f);
-        rightSample = clamp(rightSample, -1f, 1f);
 
-        byte[] buffer = buffers[writeBufferIndex];
-        buffer[bufferPosition++] = (byte) (128 + (int) (leftSample * 127f));
-        buffer[bufferPosition++] = (byte) (128 + (int) (rightSample * 127f));
-
-        if (bufferPosition >= buffer.length) {
+        if (bufferPosition >= bufferSize) {
             enqueueFilledBuffer();
         }
     }
@@ -224,6 +238,7 @@ public class Apu {
                 readBufferIndex = (readBufferIndex + 1) % buffers.length;
                 queuedBuffers--;
             }
+            System.arraycopy(stagingBuffer, 0, buffers[writeBufferIndex], 0, bufferSize);
             queuedBuffers++;
             writeBufferIndex = (writeBufferIndex + 1) % buffers.length;
         }

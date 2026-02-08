@@ -34,6 +34,9 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 
 import gbc.controller.EmulatorActions;
+import gbc.controller.config.AppConfig;
+import gbc.controller.config.ConfigSerializer;
+import gbc.controller.config.EmulatorConfig;
 import gbc.view.EmulatorView.ColorFilter;
 import net.miginfocom.swing.MigLayout;
 
@@ -198,9 +201,14 @@ public class SettingsDialog extends JDialog {
         addJoystickBinding(joyMap, "Button B", "input.joystick.button.b", "1");
         addJoystickBinding(joyMap, "Start", "input.joystick.button.start", "7");
         addJoystickBinding(joyMap, "Select", "input.joystick.button.select", "6");
-        addJoystickBinding(joyMap, "Axis X", "input.joystick.axis.x", "x");
-        addJoystickBinding(joyMap, "Axis Y", "input.joystick.axis.y", "y");
+        addJoystickAxisBinding(joyMap, "Axis X", "input.joystick.axis.x", "x");
+        addJoystickAxisBinding(joyMap, "Axis Y", "input.joystick.axis.y", "y");
+        addCheckbox(joyMap, "Invert Axis X", "input.joystick.axis.x.inverted");
+        addCheckbox(joyMap, "Invert Axis Y", "input.joystick.axis.y.inverted");
         addCheckbox(joyMap, "Use POV/D-Pad", "input.joystick.pov");
+        JButton testDpad = new JButton("Test D-Pad");
+        testDpad.addActionListener(e -> testDpadInput());
+        addRow(joyMap, " ", testDpad);
 
         JPanel bindings = createFormPanel();
         bindings.setBorder(BorderFactory.createTitledBorder("Key Bindings"));
@@ -369,10 +377,28 @@ public class SettingsDialog extends JDialog {
         addRow(panel, label, row);
     }
 
+    private void addJoystickAxisBinding(JPanel panel, String label, String key, String defaultValue) {
+        JTextField field = new JTextField(defaultValue);
+        field.setPreferredSize(new Dimension(120, 26));
+        JButton detect = new JButton("Detect");
+        detect.addActionListener(e -> detectJoystickBinding(key, field));
+        JButton browse = new JButton("Browse");
+        browse.addActionListener(e -> browseAxes(field));
+        JPanel row = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 0));
+        row.add(field);
+        row.add(detect);
+        row.add(browse);
+        joystickBindings.put(key, field);
+        defaultJoystickBindings.put(key, defaultValue);
+        addRow(panel, label, row);
+    }
+
     private void loadFromSystemProperties() {
-        Properties props = new Properties();
-        props.putAll(loadConfigProperties());
-        props.putAll(System.getProperties());
+        loadFromConfig(AppConfig.get().getConfig());
+    }
+
+    private void loadFromConfig(EmulatorConfig config) {
+        Properties props = config.toProperties();
         loadFromProperties(props);
     }
 
@@ -388,16 +414,7 @@ public class SettingsDialog extends JDialog {
     }
 
     private Properties loadConfigProperties() {
-        Properties props = new Properties();
-        Path configPath = Path.of(CONFIG_FILE);
-        if (!Files.exists(configPath)) {
-            return props;
-        }
-        try (InputStream in = Files.newInputStream(configPath)) {
-            props.load(in);
-        } catch (IOException ignored) {
-        }
-        return props;
+        return AppConfig.get().getConfig().toProperties();
     }
 
     private void captureDefaultProperties() {
@@ -417,7 +434,7 @@ public class SettingsDialog extends JDialog {
     }
 
     private void loadJoysticks() {
-        loadJoysticks(System.getProperties());
+        loadJoysticks(AppConfig.get().getConfig().toProperties());
     }
 
     private void loadJoysticks(Properties props) {
@@ -530,7 +547,8 @@ public class SettingsDialog extends JDialog {
     }
 
     private void applySettings(boolean persist) {
-        Properties props = System.getProperties();
+        // Build config from UI fields
+        Properties props = new Properties();
         for (SettingEntry entry : entries) {
             entry.applyTo(props);
         }
@@ -538,10 +556,26 @@ public class SettingsDialog extends JDialog {
         applyMixerSelection(props);
         applyJoystickSelection(props);
         applyJoystickBindings(props);
+
+        EmulatorConfig config = ConfigSerializer.fromProperties(props);
+
+        // Apply to subsystems via controller
+        if (controller != null) {
+            controller.applyConfig(config);
+        } else {
+            AppConfig.get().setConfig(config);
+            ConfigSerializer.forceApplyToSystemProperties(config);
+        }
+
         applyToRuntime();
 
         if (persist) {
-            savePropertiesFile(props);
+            try {
+                ConfigSerializer.save(Path.of(CONFIG_FILE), config);
+            } catch (IOException e) {
+                window.showMessage("Failed to save settings: " + e.getMessage(), "Settings",
+                        javax.swing.JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
@@ -692,7 +726,7 @@ public class SettingsDialog extends JDialog {
                 } else {
                     continue;
                 }
-                int bufferSize = Math.max(256, Integer.getInteger("audio.bufferSize", 1024));
+                int bufferSize = Math.max(256, AppConfig.get().getConfig().getAudioBufferSize());
                 line.open(format, bufferSize);
                 return line;
             } catch (Exception e) {
@@ -734,7 +768,7 @@ public class SettingsDialog extends JDialog {
                         javax.sound.sampled.SourceDataLine line = (javax.sound.sampled.SourceDataLine) mixer.getLine(
                                 new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class,
                                         format));
-                        int bufferSize = Math.max(256, Integer.getInteger("audio.bufferSize", 1024));
+                        int bufferSize = Math.max(256, AppConfig.get().getConfig().getAudioBufferSize());
                         line.open(format, bufferSize);
                         return line;
                     } catch (Exception ignored) {
@@ -774,38 +808,14 @@ public class SettingsDialog extends JDialog {
     }
 
     private void applyToRuntime() {
+        EmulatorConfig cfg = AppConfig.get().getConfig();
+
         // --- Video ---
-        String scale = System.getProperty("video.scale");
-        if (scale != null) {
-            try {
-                emulatorView.setScaleFactor(Integer.parseInt(scale));
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        emulatorView.setMaintainAspectRatio(Boolean.parseBoolean(System.getProperty("video.integerScale", "true")));
-        emulatorView.setShowScanlines(Boolean.parseBoolean(System.getProperty("video.scanlines", "false")));
-
-        String filter = System.getProperty("video.filter", "none");
-        emulatorView.setSmoothScaling("linear".equalsIgnoreCase(filter));
-
-        String palette = System.getProperty("video.palette", "dmg_default");
-        emulatorView.setColorFilter(mapPaletteToFilter(palette));
-
-        // --- Audio (restart engine with new sample rate / buffer / mixer) ---
-        if (controller != null) {
-            try {
-                controller.restartAudio();
-            } catch (Exception ignored) {
-            }
-        }
-
-        // --- Input (reload timing parameters) ---
-        if (controller != null) {
-            try {
-                controller.reloadInputConfig();
-            } catch (Exception ignored) {
-            }
-        }
+        emulatorView.setScaleFactor(cfg.getScale());
+        emulatorView.setMaintainAspectRatio(cfg.isIntegerScale());
+        emulatorView.setShowScanlines(cfg.isScanlines());
+        emulatorView.setSmoothScaling("linear".equalsIgnoreCase(cfg.getFilter()));
+        emulatorView.setColorFilter(mapPaletteToFilter(cfg.getPalette()));
 
         // --- Theme (hot-swap FlatLaf light/dark) ---
         try {
@@ -826,118 +836,36 @@ public class SettingsDialog extends JDialog {
         };
     }
 
-    private void savePropertiesFile(Properties props) {
-        Path path = Path.of(CONFIG_FILE);
-        StringBuilder out = new StringBuilder();
-        out.append("# Emulator configuration (generated by UI)\n");
-        writeSection(out, "Core", List.of(
-                "emulator.romDir",
-                "emulator.saveDir",
-                "emulator.fastForwardSpeed",
-                "emulator.frameRate",
-                "emulator.throttle",
-                "emulator.syncMode",
-                "emulator.hardware",
-                "emulator.bootRom"), props);
-        writeSection(out, "Video", List.of(
-                "video.scale",
-                "video.integerScale",
-                "video.scanlines",
-                "video.vsync",
-                "video.filter",
-                "video.palette",
-                "video.frameskip",
-                "video.renderStats"), props);
-        writeSection(out, "Audio", List.of(
-                "audio.enabled",
-                "audio.sampleRate",
-                "audio.bufferSize",
-                "audio.latencyMs",
-                "gbc.audio.nullOutput",
-                "gbc.audio.mixer",
-                "gbc.audio.debug",
-                "gbc.audio.testTone"), props);
-        writeSection(out, "Input", List.of(
-                "input.repeatDelayMs",
-                "input.repeatRateMs",
-                "input.debounceMs",
-                "input.minPressMs",
-                "input.deadzone",
-                "input.joystick.enabled",
-                "input.joystick.device",
-                "input.joystick.pollMs"), props);
-        writeBindings(out, props);
-        writeJoystickMappings(out, props);
-        writeSection(out, "Logging", List.of(
-                "gbc.logging.console",
-                "gbc.logging.file",
-                "gbc.logging.level.root",
-                "gbc.logging.level.model",
-                "gbc.logging.level.cpu",
-                "gbc.logging.level.memory",
-                "gbc.logging.level.graphics",
-                "gbc.logging.level.view",
-                "gbc.logging.level.controller"), props);
-        writeSection(out, "Debug", List.of(
-                "gbc.ppu.trace",
-                "gbc.timer.trace",
-                "gbc.cpu.trace",
-                "gbc.audio.debug",
-                "gbc.audio.testTone"), props);
-        writeSection(out, "UI", List.of(
-                "ui.theme"), props);
+    // Serialization is now handled by ConfigSerializer - no hardcoded key lists.
 
+    /** Provide a list of axis names available on the resolved joystick. */
+    public List<String> getAvailableAxes() {
+        String selectedDevice = "";
+        if (joystickCombo != null && joystickCombo.getSelectedItem() != null) {
+            selectedDevice = joystickCombo.getSelectedItem().toString();
+        }
         try {
-            Files.writeString(path, out.toString(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            window.showMessage("Failed to save settings: " + e.getMessage(), "Settings",
-                    javax.swing.JOptionPane.ERROR_MESSAGE);
+            gbc.controller.input.JInputNativeLoader.loadIfNeeded();
+        } catch (Throwable ex) {
+            return List.of();
         }
-    }
-
-    private void writeSection(StringBuilder out, String title, List<String> keys, Properties props) {
-        out.append("\n# --- ").append(title).append(" ---\n");
-        for (String key : keys) {
-            String value = props.getProperty(key);
-            if (value == null) {
-                continue;
-            }
-            out.append(key).append("=").append(value).append("\n");
+        net.java.games.input.Controller controller = resolveSelectedJoystick(selectedDevice);
+        if (controller == null) {
+            return List.of();
         }
-    }
-
-    private void writeBindings(StringBuilder out, Properties props) {
-        out.append("\n# --- Input Bindings ---\n");
-        for (String key : props.stringPropertyNames()) {
-            if (key.startsWith("input.key.")) {
-                out.append(key).append("=").append(props.getProperty(key)).append("\n");
+        List<String> axes = new ArrayList<>();
+        for (net.java.games.input.Component comp : controller.getComponents()) {
+            if (comp.getIdentifier() instanceof net.java.games.input.Component.Identifier.Axis
+                    && !comp.getIdentifier().equals(net.java.games.input.Component.Identifier.Axis.POV)) {
+                axes.add(comp.getIdentifier().getName());
             }
         }
-    }
-
-    private void writeJoystickMappings(StringBuilder out, Properties props) {
-        out.append("\n# --- Joystick Mapping ---\n");
-        for (String key : props.stringPropertyNames()) {
-            if (key.startsWith("input.joystick.button.") || key.startsWith("input.joystick.axis.")) {
-                out.append(key).append("=").append(props.getProperty(key)).append("\n");
-            }
-        }
-        if (props.getProperty("input.joystick.pov") != null) {
-            out.append("input.joystick.pov=").append(props.getProperty("input.joystick.pov")).append("\n");
-        }
+        return axes;
     }
 
     private void restoreDefaults() {
-        // Keep a deterministic UI baseline independent from the user's saved file.
-        Properties defaults = new Properties();
-        defaults.putAll(defaultProperties);
-        for (SettingEntry entry : entries) {
-            entry.loadFrom(defaults);
-        }
-        loadKeyBindings(defaults);
-        loadMixers(defaults);
-        loadJoysticks(defaults);
-        loadJoystickBindings(defaults);
+        EmulatorConfig defaults = new EmulatorConfig();
+        loadFromConfig(defaults);
     }
 
     private void detectJoystickBinding(String key, JTextField field) {
@@ -979,6 +907,105 @@ public class SettingsDialog extends JDialog {
         worker.execute();
     }
 
+    private void browseAxes(JTextField field) {
+        String selectedDevice = "";
+        if (joystickCombo != null && joystickCombo.getSelectedItem() != null) {
+            selectedDevice = joystickCombo.getSelectedItem().toString();
+        }
+        try {
+            gbc.controller.input.JInputNativeLoader.loadIfNeeded();
+        } catch (Throwable ex) {
+            window.showMessage("JInput not available: " + ex.getMessage(),
+                    "Joystick", javax.swing.JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        net.java.games.input.Controller controller = resolveSelectedJoystick(selectedDevice);
+        if (controller == null) {
+            window.showMessage("No joystick found. Connect a controller and try again.",
+                    "Joystick", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        List<String> axisNames = new ArrayList<>();
+        for (net.java.games.input.Component comp : controller.getComponents()) {
+            if (comp.getIdentifier() instanceof net.java.games.input.Component.Identifier.Axis
+                    && !comp.getIdentifier().equals(net.java.games.input.Component.Identifier.Axis.POV)) {
+                axisNames.add(comp.getIdentifier().getName());
+            }
+        }
+        if (axisNames.isEmpty()) {
+            window.showMessage("No axes found on controller: " + controller.getName(),
+                    "Joystick", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        String[] options = axisNames.toArray(new String[0]);
+        String chosen = (String) javax.swing.JOptionPane.showInputDialog(
+                this, "Select an axis:", "Available Axes",
+                javax.swing.JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        if (chosen != null) {
+            field.setText(chosen);
+        }
+    }
+
+    private void testDpadInput() {
+        String selectedDevice = "";
+        if (joystickCombo != null && joystickCombo.getSelectedItem() != null) {
+            selectedDevice = joystickCombo.getSelectedItem().toString();
+        }
+        setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.WAIT_CURSOR));
+        final String selectedHint = selectedDevice;
+        javax.swing.SwingWorker<String, Void> worker = new javax.swing.SwingWorker<>() {
+            @Override
+            protected String doInBackground() {
+                gbc.controller.input.JInputNativeLoader.loadIfNeeded();
+                net.java.games.input.Controller controller = resolveSelectedJoystick(selectedHint);
+                if (controller == null) {
+                    return null;
+                }
+                long deadline = System.nanoTime() + 3_000_000_000L;
+                while (System.nanoTime() < deadline) {
+                    if (!controller.poll()) {
+                        break;
+                    }
+                    net.java.games.input.Component pov = controller.getComponent(
+                            net.java.games.input.Component.Identifier.Axis.POV);
+                    if (pov != null) {
+                        float v = pov.getPollData();
+                        if (v != net.java.games.input.Component.POV.CENTER) {
+                            return "D-Pad detected! Value: " + v;
+                        }
+                    }
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                setCursor(java.awt.Cursor.getDefaultCursor());
+                try {
+                    String result = get();
+                    if (result != null) {
+                        window.showMessage(result, "D-Pad Test",
+                                javax.swing.JOptionPane.INFORMATION_MESSAGE);
+                    } else {
+                        window.showMessage(
+                                "No D-Pad input detected. Press a direction on the D-Pad and try again.",
+                                "D-Pad Test", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+                    }
+                } catch (Exception e) {
+                    window.showMessage("D-Pad test failed: " + e.getMessage(),
+                            "D-Pad Test", javax.swing.JOptionPane.WARNING_MESSAGE);
+                }
+            }
+        };
+        worker.execute();
+    }
+
     private net.java.games.input.Controller resolveSelectedJoystick(String hint) {
         net.java.games.input.Controller[] controllers = net.java.games.input.ControllerEnvironment
                 .getDefaultEnvironment().getControllers();
@@ -1014,7 +1041,8 @@ public class SettingsDialog extends JDialog {
                         return comp.getIdentifier().getName();
                     }
                 } else if (key.contains("axis")) {
-                    if (comp.getIdentifier() instanceof net.java.games.input.Component.Identifier.Axis) {
+                    if (comp.getIdentifier() instanceof net.java.games.input.Component.Identifier.Axis
+                            && !comp.getIdentifier().equals(net.java.games.input.Component.Identifier.Axis.POV)) {
                         if (Math.abs(value) > 0.6f) {
                             return comp.getIdentifier().getName();
                         }
@@ -1139,12 +1167,11 @@ public class SettingsDialog extends JDialog {
         applyMixerSelection(props);
         applyJoystickSelection(props);
         applyJoystickBindings(props);
+        EmulatorConfig profileConfig = ConfigSerializer.fromProperties(props);
         Path file = profilesDir.resolve(name + ".properties");
         try {
             Files.createDirectories(profilesDir);
-            try (java.io.OutputStream out = Files.newOutputStream(file)) {
-                props.store(out, "GBJava profile: " + name);
-            }
+            ConfigSerializer.save(file, profileConfig);
             reloadProfiles();
             profilesCombo.setSelectedItem(name);
         } catch (IOException e) {
@@ -1170,18 +1197,8 @@ public class SettingsDialog extends JDialog {
             window.showMessage("Profile not found: " + name, "Profiles", javax.swing.JOptionPane.WARNING_MESSAGE);
             return;
         }
-        Properties props = new Properties();
-        try (InputStream in = Files.newInputStream(file)) {
-            props.load(in);
-        } catch (IOException e) {
-            window.showMessage("Failed to load profile: " + e.getMessage(), "Profiles",
-                    javax.swing.JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        for (String key : props.stringPropertyNames()) {
-            System.setProperty(key, props.getProperty(key));
-        }
-        loadFromSystemProperties();
+        EmulatorConfig profileConfig = ConfigSerializer.load(file);
+        loadFromConfig(profileConfig);
         applyToRuntime();
     }
 

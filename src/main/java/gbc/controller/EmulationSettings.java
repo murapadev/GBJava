@@ -3,11 +3,16 @@ package gbc.controller;
 import java.util.concurrent.TimeUnit;
 
 import gbc.controller.config.AppConfig;
+import gbc.controller.config.EmulatorConfig;
 
 final class EmulationSettings {
 
+    private EmulatorConfig cfg() {
+        return AppConfig.get().getConfig();
+    }
+
     int targetFps() {
-        return Math.max(1, AppConfig.get().getInt("emulator.frameRate", 60));
+        return Math.max(1, cfg().getFrameRate());
     }
 
     long frameTimeNs() {
@@ -15,7 +20,8 @@ final class EmulationSettings {
     }
 
     String syncMode() {
-        return AppConfig.get().getStringLower("emulator.syncMode", "hybrid");
+        String mode = cfg().getSyncMode();
+        return mode == null ? "hybrid" : mode.toLowerCase();
     }
 
     boolean throttleEnabled() {
@@ -23,11 +29,11 @@ final class EmulationSettings {
         if ("none".equals(mode) || "audio".equals(mode)) {
             return false;
         }
-        return AppConfig.get().getBoolean("emulator.throttle", true);
+        return cfg().isThrottle();
     }
 
     int frameSkip() {
-        return Math.max(0, AppConfig.get().getInt("video.frameskip", 0));
+        return Math.max(0, cfg().getFrameskip());
     }
 
     int renderInterval() {
@@ -40,7 +46,7 @@ final class EmulationSettings {
     }
 
     long audioSyncIdleNs() {
-        int latencyMs = AppConfig.get().getInt("audio.latencyMs", 150);
+        int latencyMs = cfg().getLatencyMs();
         if (latencyMs < 1) {
             latencyMs = 150;
         }
@@ -64,6 +70,6 @@ final class EmulationSettings {
     }
 
     int audioBufferSize() {
-        return AppConfig.get().getInt("audio.bufferSize", 4096);
+        return cfg().getAudioBufferSize();
     }
 }

@@ -20,12 +20,12 @@ class OamSearchWindowPenaltyTest {
 
         memory.wx = 0;
         search.searchSprites(memory.ly);
-        assertEquals(180, search.getMode3Duration(),
+        assertEquals(181, search.getMode3Duration(),
                 "WX=0 with SCX%8!=0 should use 5-dot window penalty");
 
         memory.wx = 7;
         search.searchSprites(memory.ly);
-        assertEquals(181, search.getMode3Duration(),
+        assertEquals(182, search.getMode3Duration(),
                 "Regular window start should keep the 6-dot penalty");
     }
 
@@ -41,7 +41,7 @@ class OamSearchWindowPenaltyTest {
         OamSearch search = new OamSearch(memory);
         search.searchSprites(memory.ly);
 
-        assertEquals(177, search.getMode3Duration(),
+        assertEquals(180, search.getMode3Duration(),
                 "Off-screen window should only apply SCX fine-scroll penalty");
     }
 

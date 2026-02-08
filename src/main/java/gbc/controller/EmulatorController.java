@@ -25,6 +25,9 @@ import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 
 import gbc.controller.audio.AudioEngine;
+import gbc.controller.config.AppConfig;
+import gbc.controller.config.ConfigSerializer;
+import gbc.controller.config.EmulatorConfig;
 import gbc.controller.input.JoystickManager;
 import gbc.controller.io.RomLoader;
 import gbc.model.GameBoyColor;
@@ -453,6 +456,15 @@ public class EmulatorController implements EmulatorActions {
     public void reloadInputConfig() {
         inputCoordinator.reconfigure();
         LOGGER.info("Input configuration reloaded");
+    }
+
+    @Override
+    public void applyConfig(EmulatorConfig config) {
+        AppConfig.get().setConfig(config);
+        ConfigSerializer.forceApplyToSystemProperties(config);
+        audioEngine.restart(gbc);
+        inputCoordinator.reconfigure();
+        LOGGER.info("Configuration applied to all subsystems");
     }
 
     @Override

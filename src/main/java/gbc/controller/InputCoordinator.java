@@ -11,6 +11,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import gbc.controller.config.AppConfig;
+import gbc.controller.config.EmulatorConfig;
+
 /**
  * Handles keyboard input mapping, debouncing, and repeats for the emulator.
  */
@@ -87,11 +90,12 @@ final class InputCoordinator {
         int keyCode = evt.keyCode;
         String keyName = normalizeKeyName(keyCode);
         String comboKeyName = buildComboKeyName(keyName, evt.modifiersEx);
-        String mapping = comboKeyName != null ? System.getProperty("input.key." + comboKeyName) : null;
+        Map<String, String> bindings = AppConfig.get().getConfig().getKeyBindings();
+        String mapping = comboKeyName != null ? bindings.get(comboKeyName) : null;
         if (mapping != null && !mapping.isBlank()) {
             return mapping.toLowerCase();
         }
-        mapping = System.getProperty("input.key." + keyName);
+        mapping = bindings.get(keyName);
         if (mapping != null && !mapping.isBlank()) {
             return mapping.toLowerCase();
         }
@@ -203,10 +207,11 @@ final class InputCoordinator {
         }
 
         void reconfigure() {
+            EmulatorConfig cfg = AppConfig.get().getConfig();
             repeatDelayNs = TimeUnit.MILLISECONDS.toNanos(
-                    Math.max(0, Integer.getInteger("input.repeatDelayMs", 250)));
+                    Math.max(0, cfg.getRepeatDelayMs()));
             repeatRateNs = TimeUnit.MILLISECONDS.toNanos(
-                    Math.max(1, Integer.getInteger("input.repeatRateMs", 40)));
+                    Math.max(1, cfg.getRepeatRateMs()));
         }
 
         void handle(String action, boolean pressed) {
@@ -259,10 +264,11 @@ final class InputCoordinator {
         }
 
         void reconfigure() {
+            EmulatorConfig cfg = AppConfig.get().getConfig();
             debounceNs = TimeUnit.MILLISECONDS.toNanos(
-                    Math.max(0, Integer.getInteger("input.debounceMs", 10)));
+                    Math.max(0, cfg.getDebounceMs()));
             minPressNs = TimeUnit.MILLISECONDS.toNanos(
-                    Math.max(0, Integer.getInteger("input.minPressMs", 20)));
+                    Math.max(0, cfg.getMinPressMs()));
         }
 
         boolean isGameAction(String action) {

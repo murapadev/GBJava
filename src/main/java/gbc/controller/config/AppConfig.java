@@ -8,6 +8,7 @@ import com.typesafe.config.ConfigFactory;
 public final class AppConfig {
     private static final AppConfig INSTANCE = new AppConfig();
     private final Config config;
+    private volatile EmulatorConfig emulatorConfig = new EmulatorConfig();
 
     private AppConfig() {
         this.config = ConfigFactory.load();
@@ -15,6 +16,16 @@ public final class AppConfig {
 
     public static AppConfig get() {
         return INSTANCE;
+    }
+
+    /** Returns the current centralized emulator configuration. */
+    public EmulatorConfig getConfig() {
+        return emulatorConfig;
+    }
+
+    /** Replaces the current emulator configuration. */
+    public void setConfig(EmulatorConfig config) {
+        this.emulatorConfig = config;
     }
 
     /**
