@@ -10,8 +10,9 @@ final class ViewSettings {
         return Math.max(1, Math.min(8, scale));
     }
 
-    boolean integerScale() {
-        return config.getBoolean("video.integerScale", true);
+    boolean maintainAspectRatio() {
+        return config.getBoolean("video.maintainAspectRatio",
+                config.getBoolean("video.integerScale", true));
     }
 
     boolean scanlines() {

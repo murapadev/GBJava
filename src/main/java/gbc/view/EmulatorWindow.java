@@ -1,5 +1,8 @@
 package gbc.view;
 
+import gbc.controller.config.AppConfig;
+import gbc.controller.config.ConfigSerializer;
+import gbc.controller.config.EmulatorConfig;
 import gbc.model.GameBoyColor;
 import gbc.controller.EmulatorActions;
 import gbc.controller.EmulatorStatus;
@@ -11,9 +14,12 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.concurrent.CompletionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.List;
 
 /**
  * EmulatorWindow with improved graphics, debugging, and UI features
@@ -110,12 +116,13 @@ public class EmulatorWindow extends JFrame implements EmulatorUi {
         Color cardBg = UIManager.getColor("TextField.background");
         Color separator = UIManager.getColor("Separator.foreground");
 
-        JPanel contentPanel = new JPanel(new MigLayout("insets 18, fill", "[grow]", "[grow]"));
+        JPanel contentPanel = new JPanel(new MigLayout("insets 12, fill", "[grow]", "[grow]"));
         contentPanel.setBackground(panelBg);
 
-        JPanel screenFrame = new JPanel(new MigLayout("insets 14, fill", "[grow]", "[grow]"));
+        Color borderColor = UIManager.getColor("Component.borderColor");
+        JPanel screenFrame = new JPanel(new MigLayout("insets 8, fill", "[grow]", "[grow]"));
         screenFrame.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(separator != null ? separator : new Color(210, 202, 188), 1),
+                BorderFactory.createLineBorder(borderColor != null ? borderColor : separator != null ? separator : new Color(210, 202, 188), 1),
                 BorderFactory.createEmptyBorder(2, 2, 2, 2)));
         screenFrame.setBackground(cardBg != null ? cardBg : new Color(250, 248, 243));
         screenFrame.add(emulatorView, "grow");
@@ -138,20 +145,41 @@ public class EmulatorWindow extends JFrame implements EmulatorUi {
             JMenu helpMenu = new JMenu("Help");
             JMenuItem aboutItem = new JMenuItem("About");
             aboutItem.addActionListener(e -> JOptionPane.showMessageDialog(this,
-                    "Game Boy Color Emulator\nMinimal UI Mode", "About", JOptionPane.INFORMATION_MESSAGE));
+                    "GBJava\nGame Boy Color Emulator", "About", JOptionPane.INFORMATION_MESSAGE));
             helpMenu.add(aboutItem);
             simpleMenuBar.add(helpMenu);
 
             setJMenuBar(simpleMenuBar);
         }
 
-        statusPanel = new JPanel(new MigLayout("insets 6 16, fillx", "[]15[]15[]15[]push[]", "[]"));
+        Font statusFont = romStatusLabel.getFont().deriveFont(11f);
+        Color mutedFg = UIManager.getColor("Label.disabledForeground");
+        if (mutedFg == null) {
+            mutedFg = new Color(140, 140, 140);
+        }
+        for (JLabel label : List.of(romStatusLabel, stateStatusLabel, speedStatusLabel, fpsStatusLabel)) {
+            label.setFont(statusFont);
+            label.setForeground(mutedFg);
+        }
+
+        statusPanel = new JPanel(new MigLayout("insets 4 12 4 12, fillx", "[]4[][]4[][]4[][]4[]push[]", "[]"));
+        statusPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0,
+                separator != null ? separator : new Color(200, 200, 200)));
         statusPanel.setBackground(panelBg);
         statusPanel.add(romStatusLabel);
+        statusPanel.add(createStatusSeparator());
         statusPanel.add(stateStatusLabel);
+        statusPanel.add(createStatusSeparator());
         statusPanel.add(speedStatusLabel);
+        statusPanel.add(createStatusSeparator());
         statusPanel.add(fpsStatusLabel);
         add(statusPanel, "growx");
+    }
+
+    private static JSeparator createStatusSeparator() {
+        JSeparator sep = new JSeparator(SwingConstants.VERTICAL);
+        sep.setPreferredSize(new Dimension(1, 14));
+        return sep;
     }
 
     private void setupEventHandlers() {
@@ -170,7 +198,8 @@ public class EmulatorWindow extends JFrame implements EmulatorUi {
     }
 
     private void setupWindow() {
-        setTitle("Game Boy Color Emulator");
+        setTitle("GBJava");
+        setIconImages(IconFactory.appIcons());
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
         // Set initial size based on emulator view
@@ -268,13 +297,16 @@ public class EmulatorWindow extends JFrame implements EmulatorUi {
     private void updateRomStatus(EmulatorStatus status) {
         if (!status.romLoaded()) {
             romStatusLabel.setText("ROM: none");
+            setTitle("GBJava");
             return;
         }
         String title = status.romTitle();
         if (title != null && !title.isBlank()) {
             romStatusLabel.setText("ROM: " + title);
+            setTitle("GBJava - " + title);
         } else {
             romStatusLabel.setText("ROM: loaded");
+            setTitle("GBJava");
         }
     }
 
@@ -360,6 +392,7 @@ public class EmulatorWindow extends JFrame implements EmulatorUi {
             SwingUtilities.invokeLater(() -> onDisplaySettingsChanged(updateMenu));
             return;
         }
+        persistDisplaySettings();
         refreshUiState(updateMenu);
     }
 
@@ -368,7 +401,36 @@ public class EmulatorWindow extends JFrame implements EmulatorUi {
             SwingUtilities.invokeLater(() -> onColorFilterChanged(filter, updateMenu));
             return;
         }
+        persistDisplaySettings();
         refreshUiState(updateMenu);
+    }
+
+    private void persistDisplaySettings() {
+        EmulatorConfig cfg = AppConfig.get().getConfig();
+        cfg.setMaintainAspectRatio(emulatorView.isMaintainAspectRatio());
+        cfg.setScanlines(emulatorView.isShowScanlines());
+        cfg.setFilter(emulatorView.isSmoothScaling() ? "linear" : "none");
+        cfg.setPalette(mapFilterToPalette(emulatorView.getColorFilter()));
+        if (controller != null) {
+            controller.applyConfig(cfg, true);
+        } else {
+            // Fallback: save directly if controller unavailable
+            try {
+                ConfigSerializer.save(AppConfig.get().getConfigPath(), cfg);
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING, "Failed to persist display settings", e);
+            }
+            ConfigSerializer.forceApplyToSystemProperties(cfg);
+        }
+    }
+
+    private String mapFilterToPalette(ColorFilter filter) {
+        return switch (filter) {
+            case GREEN_MONOCHROME -> "dmg_green";
+            case SEPIA -> "custom";
+            case HIGH_CONTRAST -> "high_contrast";
+            default -> "dmg_default";
+        };
     }
 
     public boolean hasDebugView() {
@@ -494,7 +556,7 @@ public class EmulatorWindow extends JFrame implements EmulatorUi {
         controller.reset();
 
         // Reset window title
-        setTitle("Game Boy Color Emulator");
+        setTitle("GBJava");
     }
 
     // Cleanup
@@ -545,15 +607,27 @@ public class EmulatorWindow extends JFrame implements EmulatorUi {
         }
     }
 
-    // Configuration
-    public void applySettings() {
-        // Apply any saved settings
-        // This could load from a properties file or registry
+    @Override
+    public void applyDisplayConfig(gbc.controller.config.EmulatorConfig cfg) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> applyDisplayConfig(cfg));
+            return;
+        }
+        emulatorView.setScaleFactor(cfg.getScale());
+        emulatorView.setMaintainAspectRatio(cfg.isMaintainAspectRatio());
+        emulatorView.setShowScanlines(cfg.isScanlines());
+        emulatorView.setSmoothScaling("linear".equalsIgnoreCase(cfg.getFilter()));
+        emulatorView.setColorFilter(mapPaletteToFilter(cfg.getPalette()));
+        refreshUiState(true);
     }
 
-    public void saveSettings() {
-        // Save current settings
-        // This could save to a properties file or registry
+    private ColorFilter mapPaletteToFilter(String palette) {
+        return switch (palette.toLowerCase()) {
+            case "dmg_green" -> ColorFilter.GREEN_MONOCHROME;
+            case "custom" -> ColorFilter.SEPIA;
+            case "high_contrast" -> ColorFilter.HIGH_CONTRAST;
+            default -> ColorFilter.NONE;
+        };
     }
 
     private String describeError(Throwable throwable) {

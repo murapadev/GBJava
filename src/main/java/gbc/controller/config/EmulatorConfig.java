@@ -24,7 +24,7 @@ public final class EmulatorConfig {
 
     // --- Video ---
     private int scale = 1;
-    private boolean integerScale = false;
+    private boolean maintainAspectRatio = false;
     private boolean scanlines = false;
     private boolean vsync = false;
     private String filter = "none";
@@ -41,13 +41,14 @@ public final class EmulatorConfig {
     private String mixer = "";
     private boolean audioDebug = false;
     private boolean testTone = false;
+    private String audioBackend = "openal";
 
     // --- Input ---
     private int repeatDelayMs = 0;
     private int repeatRateMs = 10;
     private int debounceMs = 0;
     private int minPressMs = 0;
-    private double deadzone = 0.0;
+    private double deadzone = 0.20;
     private boolean joystickEnabled = true;
     private String joystickDevice = "";
     private int joystickPollMs = 5;
@@ -123,7 +124,7 @@ public final class EmulatorConfig {
         this.bootRom = other.bootRom;
 
         this.scale = other.scale;
-        this.integerScale = other.integerScale;
+        this.maintainAspectRatio = other.maintainAspectRatio;
         this.scanlines = other.scanlines;
         this.vsync = other.vsync;
         this.filter = other.filter;
@@ -139,6 +140,7 @@ public final class EmulatorConfig {
         this.mixer = other.mixer;
         this.audioDebug = other.audioDebug;
         this.testTone = other.testTone;
+        this.audioBackend = other.audioBackend;
 
         this.repeatDelayMs = other.repeatDelayMs;
         this.repeatRateMs = other.repeatRateMs;
@@ -193,7 +195,7 @@ public final class EmulatorConfig {
 
         // Video
         p.setProperty("video.scale", String.valueOf(scale));
-        p.setProperty("video.integerScale", String.valueOf(integerScale));
+        p.setProperty("video.maintainAspectRatio", String.valueOf(maintainAspectRatio));
         p.setProperty("video.scanlines", String.valueOf(scanlines));
         p.setProperty("video.vsync", String.valueOf(vsync));
         p.setProperty("video.filter", filter);
@@ -210,6 +212,7 @@ public final class EmulatorConfig {
         p.setProperty("gbc.audio.mixer", mixer);
         p.setProperty("gbc.audio.debug", String.valueOf(audioDebug));
         p.setProperty("gbc.audio.testTone", String.valueOf(testTone));
+        p.setProperty("audio.backend", audioBackend);
 
         // Input
         p.setProperty("input.repeatDelayMs", String.valueOf(repeatDelayMs));
@@ -287,8 +290,8 @@ public final class EmulatorConfig {
     public int getScale() { return scale; }
     public void setScale(int scale) { this.scale = scale; }
 
-    public boolean isIntegerScale() { return integerScale; }
-    public void setIntegerScale(boolean integerScale) { this.integerScale = integerScale; }
+    public boolean isMaintainAspectRatio() { return maintainAspectRatio; }
+    public void setMaintainAspectRatio(boolean maintainAspectRatio) { this.maintainAspectRatio = maintainAspectRatio; }
 
     public boolean isScanlines() { return scanlines; }
     public void setScanlines(boolean scanlines) { this.scanlines = scanlines; }
@@ -331,6 +334,9 @@ public final class EmulatorConfig {
 
     public boolean isTestTone() { return testTone; }
     public void setTestTone(boolean testTone) { this.testTone = testTone; }
+
+    public String getAudioBackend() { return audioBackend; }
+    public void setAudioBackend(String audioBackend) { this.audioBackend = safe(audioBackend); }
 
     public int getRepeatDelayMs() { return repeatDelayMs; }
     public void setRepeatDelayMs(int repeatDelayMs) { this.repeatDelayMs = repeatDelayMs; }

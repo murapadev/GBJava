@@ -1,5 +1,6 @@
 package gbc.controller.config;
 
+import java.nio.file.Path;
 import java.util.Locale;
 
 import com.typesafe.config.Config;
@@ -9,6 +10,7 @@ public final class AppConfig {
     private static final AppConfig INSTANCE = new AppConfig();
     private final Config config;
     private volatile EmulatorConfig emulatorConfig = new EmulatorConfig();
+    private volatile Path configPath = Path.of("emulator.properties");
 
     private AppConfig() {
         this.config = ConfigFactory.load();
@@ -26,6 +28,16 @@ public final class AppConfig {
     /** Replaces the current emulator configuration. */
     public void setConfig(EmulatorConfig config) {
         this.emulatorConfig = config;
+    }
+
+    /** Returns the resolved path to the config file on disk. */
+    public Path getConfigPath() {
+        return configPath;
+    }
+
+    /** Sets the resolved config file path. */
+    public void setConfigPath(Path path) {
+        this.configPath = path;
     }
 
     /**

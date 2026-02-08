@@ -29,7 +29,6 @@ public class Apu {
 
     private final byte[][] buffers;
     private final byte[] stagingBuffer;
-    private final byte[] outputBuffer;
     private final int bufferSize;
     private int bufferPosition;
     private int writeBufferIndex;
@@ -55,6 +54,7 @@ public class Apu {
     private float cachedRightSample;
     private boolean cachedIsSilent;
     private boolean sampleCacheDirty = true;
+    private boolean wasSilent = true; // tracks silence→playing transitions for HPF reset
     private static final boolean AUDIO_DEBUG = Boolean.getBoolean("gbc.audio.debug");
     private boolean loggedEnable;
 
@@ -87,10 +87,9 @@ public class Apu {
             safeSize++;
         }
         this.bufferSize = safeSize;
-        int bufferCount = Math.max(2, Integer.getInteger("audio.bufferCount", 4));
+        int bufferCount = Math.max(2, Integer.getInteger("audio.bufferCount", 8));
         this.buffers = new byte[bufferCount][bufferSize];
         this.stagingBuffer = new byte[bufferSize];
-        this.outputBuffer = new byte[bufferSize];
         this.useDcFilter = Boolean.parseBoolean(System.getProperty("audio.dcFilter", "true"));
         this.hpfCoeff = clamp(Float.parseFloat(System.getProperty("audio.dcFilterCoeff", "0.995")), 0.90f, 0.9999f);
         this.dmgMixGain = clamp(Float.parseFloat(System.getProperty("audio.dmgMixGain", "1.0")), 0.1f, 2.0f);
@@ -211,9 +210,14 @@ public class Apu {
         if (cachedIsSilent) {
             stagingBuffer[bufferPosition++] = (byte) 128;  // Silence for unsigned 8-bit audio
             stagingBuffer[bufferPosition++] = (byte) 128;
-            // Reset DC filter state to prevent artifacts when audio resumes
-            resetDcFilter();
+            // Only reset HPF on a real transition to silence, not on every
+            // momentary zero-crossing caused by duty cycle / LFSR phases.
+            if (!wasSilent) {
+                resetDcFilter();
+                wasSilent = true;
+            }
         } else {
+            wasSilent = false;
             float leftSample = cachedLeftSample * (cgbMode ? cgbMixGain : dmgMixGain);
             float rightSample = cachedRightSample * (cgbMode ? cgbMixGain : dmgMixGain);
             if (useDcFilter) {
@@ -235,12 +239,30 @@ public class Apu {
     private void enqueueFilledBuffer() {
         synchronized (this) {
             if (queuedBuffers >= buffers.length) {
-                readBufferIndex = (readBufferIndex + 1) % buffers.length;
-                queuedBuffers--;
+                // Back-pressure: wait up to 4ms for consumer to drain a slot
+                long deadline = System.nanoTime() + 4_000_000L;
+                while (queuedBuffers >= buffers.length) {
+                    long remainNs = deadline - System.nanoTime();
+                    if (remainNs <= 0) {
+                        // Timeout — drop oldest buffer (prevents deadlock during fast-forward)
+                        readBufferIndex = (readBufferIndex + 1) % buffers.length;
+                        queuedBuffers--;
+                        break;
+                    }
+                    try {
+                        // wait() releases the monitor so fetchSamples() can proceed
+                        wait(remainNs / 1_000_000L, (int) (remainNs % 1_000_000L));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        bufferPosition = 0;
+                        return;
+                    }
+                }
             }
             System.arraycopy(stagingBuffer, 0, buffers[writeBufferIndex], 0, bufferSize);
             queuedBuffers++;
             writeBufferIndex = (writeBufferIndex + 1) % buffers.length;
+            notifyAll();
         }
         bufferPosition = 0;
     }
@@ -258,10 +280,12 @@ public class Apu {
         if (queuedBuffers <= 0) {
             return null;
         }
-        System.arraycopy(buffers[readBufferIndex], 0, outputBuffer, 0, bufferSize);
+        byte[] copy = new byte[bufferSize];
+        System.arraycopy(buffers[readBufferIndex], 0, copy, 0, bufferSize);
         readBufferIndex = (readBufferIndex + 1) % buffers.length;
         queuedBuffers--;
-        return outputBuffer;
+        notifyAll(); // wake blocked producer
+        return copy;
     }
 
     private void enableAPU(boolean enable) {
@@ -297,13 +321,17 @@ public class Apu {
             frameSequencerCycleCounter = 0;
             cycleCounter = 0;
             bufferPosition = 0;
-            queuedBuffers = 0;
-            writeBufferIndex = 0;
-            readBufferIndex = 0;
+            synchronized (this) {
+                queuedBuffers = 0;
+                writeBufferIndex = 0;
+                readBufferIndex = 0;
+                notifyAll();
+            }
             channel1.setDutyPosition(0);
             channel2.setDutyPosition(0);
             channel3.setDutyPosition(0);
             resetDcFilter();
+            wasSilent = true;
             invalidateSampleCache();
         } else if (!enabled && enable) {
             // Turn on
@@ -312,6 +340,7 @@ public class Apu {
             frameSequencerCycleCounter = 0;
             cycleCounter = 0;
             resetDcFilter();
+            wasSilent = true;
             invalidateSampleCache();
             if (AUDIO_DEBUG && !loggedEnable) {
                 loggedEnable = true;

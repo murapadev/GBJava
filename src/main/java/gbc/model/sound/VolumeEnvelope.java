@@ -73,11 +73,12 @@ public class VolumeEnvelope {
 
     public void writeByte(int address, int value) {
         if (address == registerAddress) {
+            // Only update the register latch.  The live envelope state (volume,
+            // periodTimer, period, upwards) must NOT change here — they are set
+            // exclusively by triggerEvent() and step().  Resetting them on every
+            // NRx2 write prevents the envelope from completing its fade-out,
+            // causing sounds to loop at full volume until the next trigger.
             registerValue = value & 0xFF;
-            upwards = (registerValue & 0x08) != 0;
-            period = registerValue & 0x07;
-            volume = (registerValue >>> 4) & 0x0F;
-            periodTimer = getEffectivePeriod();
         } else {
             throw new RuntimeException("Invalid address");
         }

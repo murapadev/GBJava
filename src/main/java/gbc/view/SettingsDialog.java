@@ -2,6 +2,7 @@ package gbc.view;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.KeyEvent;
@@ -27,6 +28,7 @@ import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
@@ -37,12 +39,9 @@ import gbc.controller.EmulatorActions;
 import gbc.controller.config.AppConfig;
 import gbc.controller.config.ConfigSerializer;
 import gbc.controller.config.EmulatorConfig;
-import gbc.view.EmulatorView.ColorFilter;
 import net.miginfocom.swing.MigLayout;
 
 public class SettingsDialog extends JDialog {
-
-    private static final String CONFIG_FILE = "emulator.properties";
 
     private final EmulatorWindow window;
     private final EmulatorView emulatorView;
@@ -53,7 +52,6 @@ public class SettingsDialog extends JDialog {
     private final Map<String, String> defaultJoystickBindings = new LinkedHashMap<>();
     private final Properties defaultProperties = new Properties();
 
-    private final JLabel restartHint = new JLabel("Some changes require restart to take effect.");
     private final Path profilesDir = Path.of("profiles");
 
     private JComboBox<String> profilesCombo;
@@ -72,7 +70,6 @@ public class SettingsDialog extends JDialog {
         captureDefaultProperties();
         loadFromSystemProperties();
         pack();
-        setMinimumSize(new Dimension(720, 520));
         setLocationRelativeTo(window);
     }
 
@@ -99,34 +96,26 @@ public class SettingsDialog extends JDialog {
         setLayout(new BorderLayout());
 
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Core", buildCoreTab());
-        tabs.addTab("Video", buildVideoTab());
-        tabs.addTab("Audio", buildAudioTab());
-        tabs.addTab("Input", buildInputTab());
-        tabs.addTab("Logging", buildLoggingTab());
-        tabs.addTab("Debug", buildDebugTab());
-        tabs.addTab("Profiles", buildProfilesTab());
+        tabs.addTab("General", wrapInScroll(buildGeneralTab()));
+        tabs.addTab("Audio", wrapInScroll(buildAudioTab()));
+        tabs.addTab("Controls", wrapInScroll(buildControlsTab()));
+        tabs.addTab("Advanced", wrapInScroll(buildAdvancedTab()));
 
         add(tabs, BorderLayout.CENTER);
 
         JPanel footer = new JPanel(new BorderLayout());
-        footer.setBorder(BorderFactory.createEmptyBorder(8, 12, 12, 12));
-        restartHint.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
-        footer.add(restartHint, BorderLayout.WEST);
+        footer.setBorder(BorderFactory.createEmptyBorder(6, 10, 10, 10));
 
-        JPanel buttons = new JPanel(new MigLayout("insets 0", "[]8[]8[]8[]", "[]"));
-        JButton applyButton = new JButton("Apply", IconFactory.apply());
+        JPanel buttons = new JPanel(new MigLayout("insets 0", "[]8[]8[]", "[]"));
+        JButton defaultsButton = new JButton("Defaults", IconFactory.restore());
         JButton saveButton = new JButton("Save", IconFactory.save());
         JButton closeButton = new JButton("Close", IconFactory.close());
-        JButton defaultsButton = new JButton("Restore Defaults", IconFactory.restore());
 
-        applyButton.addActionListener(e -> applySettings(false));
+        defaultsButton.addActionListener(e -> restoreDefaults());
         saveButton.addActionListener(e -> applySettings(true));
         closeButton.addActionListener(e -> setVisible(false));
-        defaultsButton.addActionListener(e -> restoreDefaults());
 
         buttons.add(defaultsButton);
-        buttons.add(applyButton);
         buttons.add(saveButton);
         buttons.add(closeButton);
 
@@ -134,173 +123,181 @@ public class SettingsDialog extends JDialog {
         add(footer, BorderLayout.SOUTH);
     }
 
-    private JPanel buildCoreTab() {
+    private JScrollPane wrapInScroll(JPanel panel) {
+        JScrollPane sp = new JScrollPane(panel);
+        sp.setBorder(null);
+        sp.getVerticalScrollBar().setUnitIncrement(12);
+        return sp;
+    }
+
+    /** General tab: Core settings + Video settings merged. */
+    private JPanel buildGeneralTab() {
         JPanel panel = createFormPanel();
+
+        // Core
         addText(panel, "ROM Directory", "emulator.romDir");
         addText(panel, "Save Directory", "emulator.saveDir");
-        addInteger(panel, "Frame Rate", "emulator.frameRate", 30, 240, 1);
-        addInteger(panel, "Fast Forward Speed", "emulator.fastForwardSpeed", 1, 8, 1);
-        addCheckbox(panel, "Throttle to Frame Rate", "emulator.throttle");
-        addCombo(panel, "Sync Mode", "emulator.syncMode", new String[] { "hybrid", "auto", "video", "audio", "none" });
-        addCombo(panel, "Hardware Mode", "emulator.hardware",
+        addCombo(panel, "Hardware", "emulator.hardware",
                 new String[] { "auto", "dmg", "dmg0", "mgb", "sgb", "sgb2", "cgb" });
-        addText(panel, "Boot ROM Path", "emulator.bootRom");
-        addCombo(panel, "Theme", "ui.theme", new String[] { "light", "dark" });
-        return wrapWithPadding(panel);
-    }
+        addText(panel, "Boot ROM", "emulator.bootRom");
+        addInteger(panel, "Frame Rate", "emulator.frameRate", 30, 240, 1);
+        addInteger(panel, "Fast Forward", "emulator.fastForwardSpeed", 1, 8, 1);
+        addCheckbox(panel, "Throttle", "emulator.throttle");
+        addCombo(panel, "Sync Mode", "emulator.syncMode",
+                new String[] { "hybrid", "auto", "video", "audio", "none" });
 
-    private JPanel buildVideoTab() {
-        JPanel panel = createFormPanel();
+        // Separator
+        panel.add(new JLabel(), "span 2, gaptop 6, wrap");
+
+        // Video
         addInteger(panel, "Scale", "video.scale", 1, 8, 1);
-        addCheckbox(panel, "Integer Scale", "video.integerScale");
+        addCheckbox(panel, "Aspect Ratio", "video.maintainAspectRatio");
         addCheckbox(panel, "Scanlines", "video.scanlines");
         addCheckbox(panel, "VSync", "video.vsync");
-        addCombo(panel, "Scaling Filter", "video.filter", new String[] { "none", "nearest", "linear" });
+        addCombo(panel, "Filter", "video.filter", new String[] { "none", "nearest", "linear" });
         addCombo(panel, "Palette", "video.palette", new String[] { "dmg_default", "dmg_green", "custom" });
         addInteger(panel, "Frame Skip", "video.frameskip", 0, 5, 1);
-        addCheckbox(panel, "Render Stats", "video.renderStats");
+        addCheckbox(panel, "Stats Overlay", "video.renderStats");
+        addCombo(panel, "Theme", "ui.theme", new String[] { "light", "dark" });
+
         return wrapWithPadding(panel);
     }
 
+    /** Audio tab: common audio settings. */
     private JPanel buildAudioTab() {
         JPanel panel = createFormPanel();
-        addCheckbox(panel, "Audio Enabled", "audio.enabled");
+        addCheckbox(panel, "Enabled", "audio.enabled");
+        addCombo(panel, "Backend", "audio.backend", new String[] { "openal", "javax" });
         addInteger(panel, "Sample Rate", "audio.sampleRate", 8000, 96000, 1000);
         addInteger(panel, "Buffer Size", "audio.bufferSize", 128, 8192, 128);
         addInteger(panel, "Latency (ms)", "audio.latencyMs", 10, 250, 5);
-        addCheckbox(panel, "Null Output", "gbc.audio.nullOutput");
-        mixerCombo = new JComboBox<>();
-        mixerCombo.setPreferredSize(new Dimension(260, 26));
-        addRow(panel, "Output Device", mixerCombo);
-        JButton testButton = new JButton("Test Output");
-        testButton.addActionListener(e -> playTestTone());
-        addRow(panel, " ", testButton);
-        addCheckbox(panel, "Audio Debug Logs", "gbc.audio.debug");
-        addCheckbox(panel, "Test Tone", "gbc.audio.testTone");
         return wrapWithPadding(panel);
     }
 
-    private JPanel buildInputTab() {
+    /** Controls tab: key bindings + joystick. */
+    private JPanel buildControlsTab() {
         JPanel panel = createFormPanel();
+
+        // Key bindings section
+        panel.add(createSectionLabel("Key Bindings"), "span 2, gapbottom 4, wrap");
+        addKeyBinding(panel, "Up", "up", "UP");
+        addKeyBinding(panel, "Down", "down", "DOWN");
+        addKeyBinding(panel, "Left", "left", "LEFT");
+        addKeyBinding(panel, "Right", "right", "RIGHT");
+        addKeyBinding(panel, "A", "a", "Z");
+        addKeyBinding(panel, "B", "b", "X");
+        addKeyBinding(panel, "Start", "start", "ENTER");
+        addKeyBinding(panel, "Select", "select", "SPACE");
+        addKeyBinding(panel, "Pause", "pause", "P");
+        addKeyBinding(panel, "Reset", "reset", "CTRL_R");
+        addKeyBinding(panel, "Fullscreen", "fullscreen", "F11");
+        addKeyBinding(panel, "Save 0/1/2", "save0", "F5");
+        addKeyBinding(panel, "Save 1", "save1", "F6");
+        addKeyBinding(panel, "Save 2", "save2", "F7");
+        addKeyBinding(panel, "Load 0/1/2", "load0", "F8");
+        addKeyBinding(panel, "Load 1", "load1", "F9");
+        addKeyBinding(panel, "Load 2", "load2", "F10");
+        addKeyBinding(panel, "Debug", "debug", "F12");
+        addKeyBinding(panel, "VRAM", "vram", "F4");
+
+        rebindHint = new JLabel("Click Rebind, then press the desired key.");
+        rebindHint.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        panel.add(rebindHint, "span 2, wrap");
+
+        // Joystick section
+        panel.add(createSectionLabel("Joystick"), "span 2, gaptop 8, gapbottom 4, wrap");
+        addCheckbox(panel, "Enabled", "input.joystick.enabled");
+        joystickCombo = new JComboBox<>();
+        joystickCombo.setPreferredSize(new Dimension(200, 26));
+        addRow(panel, "Device", joystickCombo);
+        addDecimal(panel, "Deadzone", "input.deadzone", 0.0, 0.95, 0.01);
+        addCheckbox(panel, "Use POV/D-Pad", "input.joystick.pov");
+
+        // Joystick mapping
+        addJoystickBinding(panel, "Btn A", "input.joystick.button.a", "0");
+        addJoystickBinding(panel, "Btn B", "input.joystick.button.b", "1");
+        addJoystickBinding(panel, "Btn Start", "input.joystick.button.start", "7");
+        addJoystickBinding(panel, "Btn Select", "input.joystick.button.select", "6");
+        addJoystickAxisBinding(panel, "Axis X", "input.joystick.axis.x", "x");
+        addJoystickAxisBinding(panel, "Axis Y", "input.joystick.axis.y", "y");
+        addCheckbox(panel, "Invert X", "input.joystick.axis.x.inverted");
+        addCheckbox(panel, "Invert Y", "input.joystick.axis.y.inverted");
+
+        return wrapWithPadding(panel);
+    }
+
+    /** Advanced tab: logging, debug, input timing, profiles. */
+    private JPanel buildAdvancedTab() {
+        JPanel panel = createFormPanel();
+
+        // Input timing
+        panel.add(createSectionLabel("Input Timing"), "span 2, gapbottom 4, wrap");
         addInteger(panel, "Repeat Delay (ms)", "input.repeatDelayMs", 0, 1000, 10);
         addInteger(panel, "Repeat Rate (ms)", "input.repeatRateMs", 10, 500, 5);
         addInteger(panel, "Debounce (ms)", "input.debounceMs", 0, 100, 1);
         addInteger(panel, "Min Press (ms)", "input.minPressMs", 0, 100, 1);
-        addDecimal(panel, "Deadzone", "input.deadzone", 0.0, 0.95, 0.01);
-        addCheckbox(panel, "Joystick Enabled", "input.joystick.enabled");
-        joystickCombo = new JComboBox<>();
-        joystickCombo.setPreferredSize(new Dimension(260, 26));
-        addRow(panel, "Joystick Device", joystickCombo);
-        JButton refreshJoy = new JButton("Refresh");
-        refreshJoy.addActionListener(e -> loadJoysticks());
-        addRow(panel, " ", refreshJoy);
 
-        JPanel joyMap = createFormPanel();
-        joyMap.setBorder(BorderFactory.createTitledBorder("Joystick Mapping"));
-        addJoystickBinding(joyMap, "Button A", "input.joystick.button.a", "0");
-        addJoystickBinding(joyMap, "Button B", "input.joystick.button.b", "1");
-        addJoystickBinding(joyMap, "Start", "input.joystick.button.start", "7");
-        addJoystickBinding(joyMap, "Select", "input.joystick.button.select", "6");
-        addJoystickAxisBinding(joyMap, "Axis X", "input.joystick.axis.x", "x");
-        addJoystickAxisBinding(joyMap, "Axis Y", "input.joystick.axis.y", "y");
-        addCheckbox(joyMap, "Invert Axis X", "input.joystick.axis.x.inverted");
-        addCheckbox(joyMap, "Invert Axis Y", "input.joystick.axis.y.inverted");
-        addCheckbox(joyMap, "Use POV/D-Pad", "input.joystick.pov");
-        JButton testDpad = new JButton("Test D-Pad");
-        testDpad.addActionListener(e -> testDpadInput());
-        addRow(joyMap, " ", testDpad);
+        // Audio advanced
+        panel.add(createSectionLabel("Audio Advanced"), "span 2, gaptop 8, gapbottom 4, wrap");
+        addCheckbox(panel, "Null Output", "gbc.audio.nullOutput");
+        mixerCombo = new JComboBox<>();
+        mixerCombo.setPreferredSize(new Dimension(200, 26));
+        addRow(panel, "Output Device", mixerCombo);
+        addCheckbox(panel, "Debug Logs", "gbc.audio.debug");
+        addCheckbox(panel, "Test Tone", "gbc.audio.testTone");
 
-        JPanel bindings = createFormPanel();
-        bindings.setBorder(BorderFactory.createTitledBorder("Key Bindings"));
-        addKeyBinding(bindings, "Up", "up", "UP");
-        addKeyBinding(bindings, "Down", "down", "DOWN");
-        addKeyBinding(bindings, "Left", "left", "LEFT");
-        addKeyBinding(bindings, "Right", "right", "RIGHT");
-        addKeyBinding(bindings, "A Button", "a", "Z");
-        addKeyBinding(bindings, "B Button", "b", "X");
-        addKeyBinding(bindings, "Start", "start", "ENTER");
-        addKeyBinding(bindings, "Select", "select", "SPACE");
-        addKeyBinding(bindings, "Pause", "pause", "P");
-        addKeyBinding(bindings, "Reset", "reset", "CTRL_R");
-        addKeyBinding(bindings, "Debug View", "debug", "F12");
-        addKeyBinding(bindings, "VRAM Viewer", "vram", "F4");
-        addKeyBinding(bindings, "Fullscreen", "fullscreen", "F11");
-        addKeyBinding(bindings, "Save Slot 0", "save0", "F5");
-        addKeyBinding(bindings, "Save Slot 1", "save1", "F6");
-        addKeyBinding(bindings, "Save Slot 2", "save2", "F7");
-        addKeyBinding(bindings, "Load Slot 0", "load0", "F8");
-        addKeyBinding(bindings, "Load Slot 1", "load1", "F9");
-        addKeyBinding(bindings, "Load Slot 2", "load2", "F10");
-
-        rebindHint = new JLabel("Click Rebind, then press the desired key.");
-        rebindHint.setBorder(BorderFactory.createEmptyBorder(6, 6, 0, 6));
-
-        JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.add(wrapWithPadding(panel), BorderLayout.NORTH);
-        JPanel center = new JPanel(new BorderLayout());
-        center.add(wrapWithPadding(joyMap), BorderLayout.NORTH);
-        center.add(wrapWithPadding(bindings), BorderLayout.CENTER);
-        wrapper.add(center, BorderLayout.CENTER);
-        wrapper.add(rebindHint, BorderLayout.SOUTH);
-        return wrapper;
-    }
-
-    private JPanel buildLoggingTab() {
-        JPanel panel = createFormPanel();
-        addCheckbox(panel, "Console Logging", "gbc.logging.console");
-        addText(panel, "Log File", "gbc.logging.file");
-        String[] levels = { "OFF", "SEVERE", "WARNING", "INFO", "FINE", "FINER", "FINEST" };
-        addCombo(panel, "Root Level", "gbc.logging.level.root", levels);
-        addCombo(panel, "Model Level", "gbc.logging.level.model", levels);
-        addCombo(panel, "CPU Level", "gbc.logging.level.cpu", levels);
-        addCombo(panel, "Memory Level", "gbc.logging.level.memory", levels);
-        addCombo(panel, "Graphics Level", "gbc.logging.level.graphics", levels);
-        addCombo(panel, "View Level", "gbc.logging.level.view", levels);
-        addCombo(panel, "Controller Level", "gbc.logging.level.controller", levels);
-        return wrapWithPadding(panel);
-    }
-
-    private JPanel buildDebugTab() {
-        JPanel panel = createFormPanel();
+        // Debug traces
+        panel.add(createSectionLabel("Debug Traces"), "span 2, gaptop 8, gapbottom 4, wrap");
         addCheckbox(panel, "PPU Trace", "gbc.ppu.trace");
         addCheckbox(panel, "Timer Trace", "gbc.timer.trace");
         addCheckbox(panel, "CPU Trace", "gbc.cpu.trace");
-        addCheckbox(panel, "Audio Debug", "gbc.audio.debug");
-        addCheckbox(panel, "Audio Test Tone", "gbc.audio.testTone");
+
+        // Logging
+        panel.add(createSectionLabel("Logging"), "span 2, gaptop 8, gapbottom 4, wrap");
+        addCheckbox(panel, "Console", "gbc.logging.console");
+        addText(panel, "Log File", "gbc.logging.file");
+        String[] levels = { "OFF", "SEVERE", "WARNING", "INFO", "FINE", "FINER", "FINEST" };
+        addCombo(panel, "Root", "gbc.logging.level.root", levels);
+        addCombo(panel, "Model", "gbc.logging.level.model", levels);
+        addCombo(panel, "CPU", "gbc.logging.level.cpu", levels);
+        addCombo(panel, "Memory", "gbc.logging.level.memory", levels);
+        addCombo(panel, "Graphics", "gbc.logging.level.graphics", levels);
+        addCombo(panel, "View", "gbc.logging.level.view", levels);
+        addCombo(panel, "Controller", "gbc.logging.level.controller", levels);
+
+        // Profiles
+        panel.add(createSectionLabel("Profiles"), "span 2, gaptop 8, gapbottom 4, wrap");
+        profilesCombo = new JComboBox<>();
+        profilesCombo.setPreferredSize(new Dimension(180, 26));
+        addRow(panel, "Profile", profilesCombo);
+
+        JPanel profileButtons = new JPanel(new MigLayout("insets 0", "[]6[]6[]6[]", "[]"));
+        JButton loadBtn = new JButton("Load");
+        JButton saveBtn = new JButton("Save");
+        JButton deleteBtn = new JButton("Delete");
+        JButton refreshBtn = new JButton("Refresh");
+        loadBtn.addActionListener(e -> loadSelectedProfile());
+        saveBtn.addActionListener(e -> saveProfilePrompt());
+        deleteBtn.addActionListener(e -> deleteSelectedProfile());
+        refreshBtn.addActionListener(e -> reloadProfiles());
+        profileButtons.add(loadBtn);
+        profileButtons.add(saveBtn);
+        profileButtons.add(deleteBtn);
+        profileButtons.add(refreshBtn);
+        panel.add(new JLabel(), "alignx right");
+        panel.add(profileButtons, "wrap");
+
         return wrapWithPadding(panel);
     }
 
-    private JPanel buildProfilesTab() {
-        JPanel panel = createFormPanel();
-        profilesCombo = new JComboBox<>();
-        profilesCombo.setPreferredSize(new Dimension(220, 26));
-
-        JButton loadButton = new JButton("Load");
-        JButton saveButton = new JButton("Save");
-        JButton deleteButton = new JButton("Delete");
-        JButton refreshButton = new JButton("Refresh");
-
-        loadButton.addActionListener(e -> loadSelectedProfile());
-        saveButton.addActionListener(e -> saveProfilePrompt());
-        deleteButton.addActionListener(e -> deleteSelectedProfile());
-        refreshButton.addActionListener(e -> reloadProfiles());
-
-        addRow(panel, "Profile", profilesCombo);
-
-        JPanel row = new JPanel(new MigLayout("insets 0", "[]8[]8[]8[]", "[]"));
-        row.add(loadButton);
-        row.add(saveButton);
-        row.add(deleteButton);
-        row.add(refreshButton);
-        panel.add(new JLabel(" "), "alignx right");
-        panel.add(row, "wrap");
-
-        return wrapWithPadding(panel);
+    private JLabel createSectionLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(label.getFont().deriveFont(Font.BOLD));
+        return label;
     }
 
     private JPanel createFormPanel() {
-        JPanel panel = new JPanel(new MigLayout("insets 12, fillx", "[right]12[grow,fill]", "[]"));
-        panel.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+        JPanel panel = new JPanel(new MigLayout("insets 8, fillx", "[right]8[grow,fill]", "[]"));
         return panel;
     }
 
@@ -559,24 +556,24 @@ public class SettingsDialog extends JDialog {
 
         EmulatorConfig config = ConfigSerializer.fromProperties(props);
 
-        // Apply to subsystems via controller
+        // Apply + optionally persist via controller (handles diffing + selective restart)
         if (controller != null) {
-            controller.applyConfig(config);
+            controller.applyConfig(config, persist);
         } else {
             AppConfig.get().setConfig(config);
             ConfigSerializer.forceApplyToSystemProperties(config);
-        }
-
-        applyToRuntime();
-
-        if (persist) {
-            try {
-                ConfigSerializer.save(Path.of(CONFIG_FILE), config);
-            } catch (IOException e) {
-                window.showMessage("Failed to save settings: " + e.getMessage(), "Settings",
-                        javax.swing.JOptionPane.ERROR_MESSAGE);
+            if (persist) {
+                try {
+                    ConfigSerializer.save(AppConfig.get().getConfigPath(), config);
+                } catch (IOException e) {
+                    window.showMessage("Failed to save settings: " + e.getMessage(), "Settings",
+                            javax.swing.JOptionPane.ERROR_MESSAGE);
+                }
             }
         }
+
+        // Refresh menu bar state
+        SwingUtilities.invokeLater(() -> window.refreshUiState(true));
     }
 
     private void applyJoystickSelection(Properties props) {
@@ -807,34 +804,8 @@ public class SettingsDialog extends JDialog {
         }
     }
 
-    private void applyToRuntime() {
-        EmulatorConfig cfg = AppConfig.get().getConfig();
-
-        // --- Video ---
-        emulatorView.setScaleFactor(cfg.getScale());
-        emulatorView.setMaintainAspectRatio(cfg.isIntegerScale());
-        emulatorView.setShowScanlines(cfg.isScanlines());
-        emulatorView.setSmoothScaling("linear".equalsIgnoreCase(cfg.getFilter()));
-        emulatorView.setColorFilter(mapPaletteToFilter(cfg.getPalette()));
-
-        // --- Theme (hot-swap FlatLaf light/dark) ---
-        try {
-            gbc.view.ThemeManager.apply();
-            SwingUtilities.updateComponentTreeUI(window);
-            SwingUtilities.updateComponentTreeUI(this);
-        } catch (Exception ignored) {
-        }
-
-        SwingUtilities.invokeLater(() -> window.refreshUiState(true));
-    }
-
-    private ColorFilter mapPaletteToFilter(String palette) {
-        return switch (palette.toLowerCase()) {
-            case "dmg_green" -> ColorFilter.GREEN_MONOCHROME;
-            case "custom" -> ColorFilter.SEPIA;
-            default -> ColorFilter.NONE;
-        };
-    }
+    // applyToRuntime() removed - the controller's applyConfig() handles
+    // all subsystem updates (video, audio, input, theme) via smart diffing.
 
     // Serialization is now handled by ConfigSerializer - no hardcoded key lists.
 
@@ -1199,7 +1170,8 @@ public class SettingsDialog extends JDialog {
         }
         EmulatorConfig profileConfig = ConfigSerializer.load(file);
         loadFromConfig(profileConfig);
-        applyToRuntime();
+        // Apply the loaded profile via the centralized apply path
+        applySettings(false);
     }
 
     private void deleteSelectedProfile() {

@@ -46,7 +46,8 @@ public interface EmulatorActions {
 
     /**
      * Applies the given configuration, updating the centralized config, system
-     * properties, and all subsystems (audio, input, joystick).
+     * properties, and only the subsystems whose settings actually changed.
+     * If {@code persist} is true the config is also saved to disk.
      */
-    void applyConfig(gbc.controller.config.EmulatorConfig config);
+    void applyConfig(gbc.controller.config.EmulatorConfig config, boolean persist);
 }

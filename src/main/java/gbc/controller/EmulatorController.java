@@ -34,6 +34,7 @@ import gbc.model.GameBoyColor;
 import gbc.model.cartridge.Cartridge;
 import gbc.view.EmulatorUi;
 import gbc.view.EmulatorWindow;
+import gbc.view.ThemeManager;
 
 /**
  * Coordinates the Swing UI and emulator core, delegating to
@@ -246,7 +247,7 @@ public class EmulatorController implements EmulatorActions {
                     if (currentPath != null && !currentPath.isBlank()) {
                         romName = new File(currentPath).getName();
                     }
-                    view.setTitle("Game Boy Color Emulator - " + romName);
+                    view.setTitle("GBJava - " + romName);
                 });
                 publishStatus();
                 if (!wasPaused) {
@@ -459,12 +460,74 @@ public class EmulatorController implements EmulatorActions {
     }
 
     @Override
-    public void applyConfig(EmulatorConfig config) {
+    public void applyConfig(EmulatorConfig config, boolean persist) {
+        EmulatorConfig old = AppConfig.get().getConfig();
         AppConfig.get().setConfig(config);
         ConfigSerializer.forceApplyToSystemProperties(config);
-        audioEngine.restart(gbc);
-        inputCoordinator.reconfigure();
-        LOGGER.info("Configuration applied to all subsystems");
+
+        // Selectively restart only the subsystems whose settings changed
+        if (audioChanged(old, config)) {
+            audioEngine.restart(gbc);
+            LOGGER.info("Audio engine restarted (settings changed)");
+        }
+        if (inputChanged(old, config)) {
+            inputCoordinator.reconfigure();
+            joystickManager.stop();
+            joystickManager.start(gbc.getController());
+            LOGGER.info("Input reconfigured (settings changed)");
+        }
+        if (videoChanged(old, config)) {
+            SwingUtilities.invokeLater(() -> view.applyDisplayConfig(config));
+        }
+        if (!old.getTheme().equals(config.getTheme())) {
+            SwingUtilities.invokeLater(() -> {
+                ThemeManager.apply();
+                for (java.awt.Window w : java.awt.Window.getWindows()) {
+                    SwingUtilities.updateComponentTreeUI(w);
+                }
+            });
+        }
+
+        if (persist) {
+            try {
+                ConfigSerializer.save(AppConfig.get().getConfigPath(), config);
+            } catch (java.io.IOException e) {
+                LOGGER.log(Level.WARNING, "Failed to save config", e);
+            }
+        }
+
+        LOGGER.info("Configuration applied");
+    }
+
+    private static boolean audioChanged(EmulatorConfig a, EmulatorConfig b) {
+        return a.getSampleRate() != b.getSampleRate()
+                || a.getAudioBufferSize() != b.getAudioBufferSize()
+                || a.getLatencyMs() != b.getLatencyMs()
+                || a.isAudioEnabled() != b.isAudioEnabled()
+                || a.isNullOutput() != b.isNullOutput()
+                || !a.getMixer().equals(b.getMixer())
+                || !a.getAudioBackend().equals(b.getAudioBackend());
+    }
+
+    private static boolean inputChanged(EmulatorConfig a, EmulatorConfig b) {
+        return a.getRepeatDelayMs() != b.getRepeatDelayMs()
+                || a.getRepeatRateMs() != b.getRepeatRateMs()
+                || a.getDebounceMs() != b.getDebounceMs()
+                || a.getMinPressMs() != b.getMinPressMs()
+                || Double.compare(a.getDeadzone(), b.getDeadzone()) != 0
+                || a.isJoystickEnabled() != b.isJoystickEnabled()
+                || !a.getJoystickDevice().equals(b.getJoystickDevice())
+                || !a.getKeyBindings().equals(b.getKeyBindings())
+                || !a.getJoystickButtons().equals(b.getJoystickButtons());
+    }
+
+    private static boolean videoChanged(EmulatorConfig a, EmulatorConfig b) {
+        return a.getScale() != b.getScale()
+                || a.isMaintainAspectRatio() != b.isMaintainAspectRatio()
+                || a.isScanlines() != b.isScanlines()
+                || !a.getFilter().equals(b.getFilter())
+                || !a.getPalette().equals(b.getPalette())
+                || a.isRenderStats() != b.isRenderStats();
     }
 
     @Override

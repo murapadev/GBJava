@@ -113,6 +113,9 @@ public class EmulationLoop {
                     }
                 }
 
+                // Secondary audio sync: the primary synchronisation is APU ring-buffer
+                // back-pressure (Apu.enqueueFilledBuffer blocks when full). This block
+                // adds a gentle throttle based on audio pipeline headroom.
                 if (settings.audioSyncEnabled()) {
                     long lastWrite = audioEngine.getLastWriteNs();
                     int available = audioEngine.getLastAvailableBytes();

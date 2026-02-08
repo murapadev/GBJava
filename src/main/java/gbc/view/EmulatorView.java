@@ -1,12 +1,16 @@
 package gbc.view;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
+import java.awt.RadialGradientPaint;
 import java.awt.RenderingHints;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -102,7 +106,7 @@ public class EmulatorView extends JPanel {
     private void configureFromSettings() {
         scaleFactor = settings.scale();
         smoothScaling = settings.smoothScaling();
-        maintainAspectRatio = settings.integerScale();
+        maintainAspectRatio = settings.maintainAspectRatio();
         showScanlines = settings.scanlines();
         colorFilter = settings.palette();
     }
@@ -159,8 +163,8 @@ public class EmulatorView extends JPanel {
                 drawScanlines(g2d, x, y, displaySize.width, displaySize.height);
             }
 
-            // Draw border around screen
-            g2d.setColor(Color.GRAY);
+            // Draw subtle border around screen
+            g2d.setColor(new Color(0, 0, 0, 40));
             g2d.drawRect(x - 1, y - 1, displaySize.width + 1, displaySize.height + 1);
         } else {
             // Draw a test pattern when no image is available
@@ -170,36 +174,48 @@ public class EmulatorView extends JPanel {
     }
 
     private void drawTestPattern(Graphics2D g2d) {
-        // Draw a simple test pattern to show the view is working
         int width = getWidth();
         int height = getHeight();
 
-        // Draw checkerboard pattern
-        g2d.setColor(Color.DARK_GRAY);
-        for (int x = 0; x < width; x += 20) {
-            for (int y = 0; y < height; y += 20) {
-                if ((x / 20 + y / 20) % 2 == 0) {
-                    g2d.fillRect(x, y, 20, 20);
-                }
-            }
+        // Dark solid background
+        g2d.setColor(new Color(24, 24, 32));
+        g2d.fillRect(0, 0, width, height);
+
+        // Radial vignette gradient overlay
+        float radius = Math.max(width, height) * 0.7f;
+        Point center = new Point(width / 2, height / 2);
+        RadialGradientPaint vignette = new RadialGradientPaint(
+                center, radius,
+                new float[]{0f, 0.7f, 1f},
+                new Color[]{new Color(40, 40, 52), new Color(24, 24, 32), new Color(10, 10, 16)});
+        g2d.setPaint(vignette);
+        g2d.fillRect(0, 0, width, height);
+
+        // Faint horizontal LCD grid lines
+        g2d.setColor(new Color(255, 255, 255, 8));
+        for (int y = 0; y < height; y += 3) {
+            g2d.drawLine(0, y, width, y);
         }
 
-        // Draw centered message
-        g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font("Arial", Font.BOLD, 16));
-        FontMetrics fm = g2d.getFontMetrics();
-        String message = "Game Boy Color Emulator";
-        int messageX = (width - fm.stringWidth(message)) / 2;
-        int messageY = (height + fm.getAscent()) / 2;
-        g2d.drawString(message, messageX, messageY);
+        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-        // Debug info
-        g2d.setFont(new Font("Arial", Font.PLAIN, 12));
+        // "GBJava" title in Game Boy green
+        g2d.setColor(new Color(139, 172, 15));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+        FontMetrics fm = g2d.getFontMetrics();
+        String title = "GBJava";
+        int titleX = (width - fm.stringWidth(title)) / 2;
+        int titleY = height / 2 - fm.getHeight() / 2;
+        g2d.drawString(title, titleX, titleY);
+
+        // Subtitle in muted gray
+        g2d.setColor(new Color(130, 130, 140));
+        g2d.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
         fm = g2d.getFontMetrics();
-        String debugInfo = String.format("Screen: %s, PPU: %s",
-                screen != null ? "OK" : "NULL",
-                ppu != null ? "OK" : "NULL");
-        g2d.drawString(debugInfo, 10, height - 20);
+        String subtitle = "Drop a ROM or use File \u203A Open ROM...";
+        int subX = (width - fm.stringWidth(subtitle)) / 2;
+        int subY = titleY + fm.getHeight() + 6;
+        g2d.drawString(subtitle, subX, subY);
     }
 
     private BufferedImage buildRenderedImage(BufferedImage original, Dimension displaySize) {
@@ -221,100 +237,98 @@ public class EmulatorView extends JPanel {
         return scaled;
     }
 
+    // Pre-computed Game Boy green palette as packed ints
+    private static final int GB_GREEN_DARKEST  = (15 << 16) | (56 << 8) | 15;
+    private static final int GB_GREEN_DARK     = (48 << 16) | (98 << 8) | 48;
+    private static final int GB_GREEN_LIGHT    = (139 << 16) | (172 << 8) | 15;
+    private static final int GB_GREEN_LIGHTEST = (155 << 16) | (188 << 8) | 15;
+
     private BufferedImage applyColorFilter(BufferedImage original) {
         if (colorFilter == ColorFilter.NONE) {
             return original;
         }
 
-        BufferedImage filtered = new BufferedImage(original.getWidth(), original.getHeight(),
-                BufferedImage.TYPE_INT_RGB);
-        Graphics2D g2d = filtered.createGraphics();
+        int w = original.getWidth();
+        int h = original.getHeight();
+        int[] pixels = original.getRGB(0, 0, w, h, null, 0, w);
 
         switch (colorFilter) {
-            case GREEN_MONOCHROME:
-                applyGreenMonochromeFilter(g2d, original);
-                break;
-            case SEPIA:
-                applySepiaFilter(g2d, original);
-                break;
-            case HIGH_CONTRAST:
-                applyHighContrastFilter(g2d, original);
-                break;
-            default:
-                g2d.drawImage(original, 0, 0, null);
-                break;
+            case GREEN_MONOCHROME -> applyGreenMonochromeFilter(pixels);
+            case SEPIA -> applySepiaFilter(pixels);
+            case HIGH_CONTRAST -> applyHighContrastFilter(pixels);
+            default -> { /* no-op */ }
         }
 
-        g2d.dispose();
+        BufferedImage filtered = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        filtered.setRGB(0, 0, w, h, pixels, 0, w);
         return filtered;
     }
 
-    private void applyGreenMonochromeFilter(Graphics2D g2d, BufferedImage original) {
-        // Convert to green monochrome (classic Game Boy look)
-        for (int y = 0; y < original.getHeight(); y++) {
-            for (int x = 0; x < original.getWidth(); x++) {
-                int rgb = original.getRGB(x, y);
-                int gray = (int) (0.299 * ((rgb >> 16) & 0xFF) + 0.587 * ((rgb >> 8) & 0xFF) + 0.114 * (rgb & 0xFF));
-
-                // Map to Game Boy green palette
-                Color gbColor;
-                if (gray < 64) {
-                    gbColor = new Color(15, 56, 15); // Darkest green
-                } else if (gray < 128) {
-                    gbColor = new Color(48, 98, 48); // Dark green
-                } else if (gray < 192) {
-                    gbColor = new Color(139, 172, 15); // Light green
-                } else {
-                    gbColor = new Color(155, 188, 15); // Lightest green
-                }
-
-                g2d.setColor(gbColor);
-                g2d.fillRect(x, y, 1, 1);
+    private void applyGreenMonochromeFilter(int[] pixels) {
+        for (int i = 0; i < pixels.length; i++) {
+            int rgb = pixels[i];
+            int gray = ((rgb >> 16 & 0xFF) * 77 + (rgb >> 8 & 0xFF) * 150 + (rgb & 0xFF) * 29) >> 8;
+            if (gray < 64) {
+                pixels[i] = GB_GREEN_DARKEST;
+            } else if (gray < 128) {
+                pixels[i] = GB_GREEN_DARK;
+            } else if (gray < 192) {
+                pixels[i] = GB_GREEN_LIGHT;
+            } else {
+                pixels[i] = GB_GREEN_LIGHTEST;
             }
         }
     }
 
-    private void applySepiaFilter(Graphics2D g2d, BufferedImage original) {
-        for (int y = 0; y < original.getHeight(); y++) {
-            for (int x = 0; x < original.getWidth(); x++) {
-                int rgb = original.getRGB(x, y);
-                int r = (rgb >> 16) & 0xFF;
-                int gr = (rgb >> 8) & 0xFF;
-                int b = rgb & 0xFF;
-
-                // Apply sepia transformation
-                int newR = Math.min(255, (int) (r * 0.393 + gr * 0.769 + b * 0.189));
-                int newG = Math.min(255, (int) (r * 0.349 + gr * 0.686 + b * 0.168));
-                int newB = Math.min(255, (int) (r * 0.272 + gr * 0.534 + b * 0.131));
-
-                Color sepiaColor = new Color(newR, newG, newB);
-                g2d.setColor(sepiaColor);
-                g2d.fillRect(x, y, 1, 1);
-            }
+    private void applySepiaFilter(int[] pixels) {
+        for (int i = 0; i < pixels.length; i++) {
+            int rgb = pixels[i];
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+            int newR = Math.min(255, (r * 100 + g * 196 + b * 48) >> 8);
+            int newG = Math.min(255, (r * 89 + g * 175 + b * 43) >> 8);
+            int newB = Math.min(255, (r * 70 + g * 137 + b * 34) >> 8);
+            pixels[i] = (newR << 16) | (newG << 8) | newB;
         }
     }
 
-    private void applyHighContrastFilter(Graphics2D g2d, BufferedImage original) {
-        for (int y = 0; y < original.getHeight(); y++) {
-            for (int x = 0; x < original.getWidth(); x++) {
-                int rgb = original.getRGB(x, y);
-                int gray = (int) (0.299 * ((rgb >> 16) & 0xFF) + 0.587 * ((rgb >> 8) & 0xFF) + 0.114 * (rgb & 0xFF));
-
-                // High contrast: pure black or white
-                Color contrastColor = gray < 128 ? Color.BLACK : Color.WHITE;
-                g2d.setColor(contrastColor);
-                g2d.fillRect(x, y, 1, 1);
-            }
+    private void applyHighContrastFilter(int[] pixels) {
+        for (int i = 0; i < pixels.length; i++) {
+            int rgb = pixels[i];
+            int gray = ((rgb >> 16 & 0xFF) * 77 + (rgb >> 8 & 0xFF) * 150 + (rgb & 0xFF) * 29) >> 8;
+            pixels[i] = gray < 128 ? 0x000000 : 0xFFFFFF;
         }
     }
 
     private void drawScanlines(Graphics2D g2d, int x, int y, int width, int height) {
-        g2d.setColor(new Color(0, 0, 0, 64)); // Semi-transparent black
+        Composite original = g2d.getComposite();
+        int pixelScale = height / GB_HEIGHT;
 
-        // Draw horizontal scanlines
-        for (int i = 1; i < height; i += 2) {
-            g2d.drawLine(x, y + i, x + width, y + i);
+        if (pixelScale < 2) {
+            // Low resolution: light overlay every other pixel
+            g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 30f / 255f));
+            g2d.setColor(Color.BLACK);
+            for (int i = 1; i < height; i += 2) {
+                g2d.drawLine(x, y + i, x + width, y + i);
+            }
+        } else {
+            // Proportional scanlines matching GB scanline pitch
+            g2d.setColor(Color.BLACK);
+            for (int line = 0; line < GB_HEIGHT; line++) {
+                int lineY = y + line * pixelScale;
+                // Primary dark scanline
+                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.18f));
+                g2d.drawLine(x, lineY, x + width, lineY);
+                // Secondary lighter line if enough room
+                if (pixelScale >= 3) {
+                    g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.06f));
+                    g2d.drawLine(x, lineY + 1, x + width, lineY + 1);
+                }
+            }
         }
+
+        g2d.setComposite(original);
     }
 
     private Dimension calculateDisplaySize() {

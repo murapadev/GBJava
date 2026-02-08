@@ -8,8 +8,8 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
-import java.awt.Window;
 import java.awt.event.WindowEvent;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+
+import net.miginfocom.swing.MigLayout;
 
 /**
  * Application menu bar driving emulator, view and debug controls.
@@ -284,7 +286,7 @@ public class MenuBar extends JMenuBar {
         debugViewItem.addActionListener(e -> window.openDebugView());
         debugMenu.add(debugViewItem);
 
-        JMenuItem vramViewerItem = new JMenuItem("VRAM Viewer", IconFactory.debug());
+        JMenuItem vramViewerItem = new JMenuItem("VRAM Viewer", IconFactory.vramViewer());
         vramViewerItem.setMnemonic(KeyEvent.VK_V);
         vramViewerItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F4, 0));
         vramViewerItem.setEnabled(window.hasVRAMViewer());
@@ -293,11 +295,11 @@ public class MenuBar extends JMenuBar {
 
         debugMenu.addSeparator();
 
-        JMenuItem dumpMemoryItem = new JMenuItem("Dump Memory...", IconFactory.debug());
+        JMenuItem dumpMemoryItem = new JMenuItem("Dump Memory...", IconFactory.memoryDump());
         dumpMemoryItem.addActionListener(e -> dumpMemory());
         debugMenu.add(dumpMemoryItem);
 
-        JMenuItem dumpRegistersItem = new JMenuItem("Dump Registers", IconFactory.debug());
+        JMenuItem dumpRegistersItem = new JMenuItem("Dump Registers", IconFactory.registerDump());
         dumpRegistersItem.addActionListener(e -> dumpRegisters());
         debugMenu.add(dumpRegistersItem);
 
@@ -346,7 +348,7 @@ public class MenuBar extends JMenuBar {
                 }
                 window.setStatusText("ROM loaded: " + file.getName());
                 if (controller == null) {
-                    window.setTitle("Game Boy Color Emulator - " + file.getName());
+                    window.setTitle("GBJava - " + file.getName());
                     emulatorView.repaint();
                 }
                 window.refreshUiState(true);
@@ -548,55 +550,111 @@ public class MenuBar extends JMenuBar {
     }
 
     private void showControlsDialog() {
-        String controlsText = """
-                Game Boy Controls:
+        JDialog dialog = new JDialog(window, "Controls", true);
+        dialog.setLayout(new MigLayout("insets 20, fillx, wrap 1", "[grow]"));
 
-                D-Pad:        Arrow Keys
-                A Button:     Z Key
-                B Button:     X Key
-                Start:        Enter Key
-                Select:       Space Key
+        Color accentColor = UIManager.getColor("Component.accentColor");
+        if (accentColor == null) {
+            accentColor = new Color(60, 130, 200);
+        }
 
-                Emulator Controls:
+        dialog.add(createSectionHeader("Game Boy"), "growx, gaptop 0");
+        dialog.add(createControlRow("D-Pad", "Arrow Keys", accentColor), "growx");
+        dialog.add(createControlRow("A Button", "Z", accentColor), "growx");
+        dialog.add(createControlRow("B Button", "X", accentColor), "growx");
+        dialog.add(createControlRow("Start", "Enter", accentColor), "growx");
+        dialog.add(createControlRow("Select", "Space", accentColor), "growx");
 
-                Pause:        P Key
-                Reset:        Ctrl+R
-                Debug View:   F12
-                VRAM Viewer:  F4
-                Fullscreen:   F11
-                Open ROM:     Ctrl+O
-                Save State:   Ctrl+S
-                Load State:   Ctrl+L
-                """;
+        dialog.add(createSectionHeader("Emulator"), "growx, gaptop 12");
+        dialog.add(createControlRow("Pause", "P", accentColor), "growx");
+        dialog.add(createControlRow("Reset", "Ctrl+R", accentColor), "growx");
+        dialog.add(createControlRow("Debug View", "F12", accentColor), "growx");
+        dialog.add(createControlRow("VRAM Viewer", "F4", accentColor), "growx");
+        dialog.add(createControlRow("Fullscreen", "F11", accentColor), "growx");
+        dialog.add(createControlRow("Open ROM", "Ctrl+O", accentColor), "growx");
+        dialog.add(createControlRow("Save State", "Ctrl+S", accentColor), "growx");
+        dialog.add(createControlRow("Load State", "Ctrl+L", accentColor), "growx");
 
-        JTextArea textArea = new JTextArea(controlsText);
-        textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        textArea.setEditable(false);
-        JScrollPane scrollPane = new JScrollPane(textArea);
-        scrollPane.setPreferredSize(new Dimension(420, 320));
-        JOptionPane.showMessageDialog(window, scrollPane, "Controls", JOptionPane.INFORMATION_MESSAGE);
+        JButton closeBtn = new JButton("Close");
+        closeBtn.addActionListener(e -> dialog.dispose());
+        dialog.add(closeBtn, "center, gaptop 12");
+
+        dialog.pack();
+        dialog.setLocationRelativeTo(window);
+        dialog.setVisible(true);
+    }
+
+    private static JPanel createSectionHeader(String title) {
+        JPanel panel = new JPanel(new MigLayout("insets 0, fillx", "[grow]"));
+        JLabel label = new JLabel(title);
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 13f));
+        Color muted = UIManager.getColor("Label.disabledForeground");
+        if (muted != null) {
+            label.setForeground(muted);
+        }
+        panel.add(label, "growx");
+        panel.add(new JSeparator(), "growx, newline, gaptop 2");
+        return panel;
+    }
+
+    private static JPanel createControlRow(String action, String key, Color accent) {
+        JPanel panel = new JPanel(new MigLayout("insets 2 8 2 8, fillx", "[grow][]"));
+        JLabel actionLabel = new JLabel(action);
+        JLabel keyLabel = new JLabel(key);
+        keyLabel.setFont(keyLabel.getFont().deriveFont(Font.BOLD));
+        keyLabel.setForeground(accent);
+        panel.add(actionLabel);
+        panel.add(keyLabel);
+        return panel;
     }
 
     private void showAboutDialog() {
-        String aboutText = """
-                Game Boy Color Emulator
-                Version 2.0 Enhanced
+        JDialog dialog = new JDialog(window, "About GBJava", true);
+        dialog.setLayout(new MigLayout("insets 24, fillx, wrap 1, align center", "[center]"));
 
-                A Java-based Game Boy Color emulator with
-                enhanced graphics, debugging, and UI features.
+        BufferedImage icon = IconFactory.appIcon(64);
+        JLabel iconLabel = new JLabel(new ImageIcon(icon));
+        dialog.add(iconLabel, "center");
 
-                Features:
-                • Accurate CPU emulation
-                • Enhanced graphics with filters
-                • Comprehensive debug tools
-                • VRAM and memory viewers
-                • Save/Load states
-                • Multiple scaling options
+        JLabel titleLabel = new JLabel("GBJava");
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 20f));
+        dialog.add(titleLabel, "center, gaptop 8");
 
-                Built with Java 19+ and Swing
-                """;
+        JLabel versionLabel = new JLabel("Version 1.0.0");
+        versionLabel.setFont(versionLabel.getFont().deriveFont(13f));
+        Color muted = UIManager.getColor("Label.disabledForeground");
+        if (muted != null) {
+            versionLabel.setForeground(muted);
+        }
+        dialog.add(versionLabel, "center, gaptop 2");
 
-        JOptionPane.showMessageDialog(window, aboutText, "About", JOptionPane.INFORMATION_MESSAGE);
+        dialog.add(new JSeparator(), "growx, gaptop 12, gapbottom 8");
+
+        JLabel descLabel = new JLabel(
+                "<html><center>Game Boy Color emulator written in Java.<br>"
+                + "Built with Java 21, FlatLaf, and Swing.</center></html>");
+        descLabel.setFont(descLabel.getFont().deriveFont(13f));
+        dialog.add(descLabel, "center");
+
+        JLabel featuresLabel = new JLabel(
+                "<html><ul style='margin-left:8px'>"
+                + "<li>Accurate CPU &amp; PPU emulation</li>"
+                + "<li>Color filters &amp; scanline effects</li>"
+                + "<li>VRAM &amp; memory debug tools</li>"
+                + "<li>Save/Load states</li>"
+                + "<li>OpenAL audio engine</li>"
+                + "</ul></html>");
+        featuresLabel.setFont(featuresLabel.getFont().deriveFont(12f));
+        dialog.add(featuresLabel, "center, gaptop 4");
+
+        JButton closeBtn = new JButton("Close");
+        closeBtn.addActionListener(e -> dialog.dispose());
+        dialog.add(closeBtn, "center, gaptop 12");
+
+        dialog.pack();
+        dialog.setResizable(false);
+        dialog.setLocationRelativeTo(window);
+        dialog.setVisible(true);
     }
 
     private void updateRecentROMsMenu() {

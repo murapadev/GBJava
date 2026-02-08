@@ -23,7 +23,7 @@ public class NoiseChannel {
     private boolean dacOn;
     private boolean enabled;
     private boolean lengthEnabled;
-    private int lfsr;
+    private int lfsr = 0x7FFF;
     private int periodTimer;
     private int volume;
     private int frequencyTimer;
@@ -179,10 +179,13 @@ public class NoiseChannel {
             return;
         }
         if (address == 0xFF21) {
+            // Update latch values used by trigger and readback.
+            // Do NOT reset periodTimer here — that prevents the running
+            // envelope from completing its fade-out (same issue as NRx2
+            // in VolumeEnvelope).
             incrementing = (value & 0x08) != 0;
             initialVolume = value >>> 4;
             period = value & 0x07;
-            periodTimer = getEffectiveEnvelopePeriod();
             dacOn = (value & 0b1111_1000) != 0;
 
             if (!dacOn) {
