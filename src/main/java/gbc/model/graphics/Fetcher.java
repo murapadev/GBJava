@@ -57,9 +57,11 @@ public class Fetcher {
 
     private final int[] pixelLine = new int[8];
     private int tickCounter;
-    // Sprite fetch timing: each sprite fetch incurs a 6-dot minimum penalty
+    // Sprite fetch timing: the state machine (5 steps × 2 T-cycles = 10 dots)
+    // already accounts for the fetch duration.  No additional penalty is added;
+    // real hardware takes 6-11 dots total per sprite, so 10 is within range.
     private int spriteFetchPenalty;
-    private static final int SPRITE_FETCH_MIN_PENALTY = 6;
+    private static final int SPRITE_FETCH_MIN_PENALTY = 0;
 
     public Fetcher(PixelFifo fifo, Memory memory) {
         this.fifo = fifo;
@@ -314,6 +316,10 @@ public class Fetcher {
                 || state == State.READ_SPRITE_DATA_1
                 || state == State.READ_SPRITE_DATA_2
                 || state == State.PUSH_SPRITE;
+    }
+
+    public boolean hasSpritePenalty() {
+        return spriteFetchPenalty > 0;
     }
 
     private boolean isBgState(State s) {

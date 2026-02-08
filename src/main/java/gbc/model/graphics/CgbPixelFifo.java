@@ -192,6 +192,19 @@ public class CgbPixelFifo implements PixelFifo {
     }
 
     @Override
+    public void clearForWindow() {
+        bgPixels.clear();
+        bgPalettes.clear();
+        bgPriority.clear();
+        objPixels.clear();
+        objPalettes.clear();
+        objBehindBg.clear();
+        objPriority.clear();
+        // Do NOT reset x: pixel output position must continue from the
+        // current scanline position when the window starts mid-line.
+    }
+
+    @Override
     public void reset() {
         clear();
     }

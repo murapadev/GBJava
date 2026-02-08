@@ -70,6 +70,15 @@ public interface PixelFifo {
     void clear();
 
     /**
+     * Clear the FIFO queues for window activation without resetting the
+     * screen X counter. On real hardware the pixel output position is not
+     * affected when the window starts mid-scanline.
+     */
+    default void clearForWindow() {
+        clear();
+    }
+
+    /**
      * Reset the FIFO to its initial state.
      */
     void reset();

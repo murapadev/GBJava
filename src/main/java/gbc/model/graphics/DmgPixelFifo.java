@@ -193,6 +193,19 @@ public class DmgPixelFifo implements PixelFifo {
     }
 
     @Override
+    public void clearForWindow() {
+        bgPixels.clear();
+        bgPalettes.clear();
+        objPixels.clear();
+        objPalettes.clear();
+        objPaletteIndices.clear();
+        objBehindBg.clear();
+        objPriority.clear();
+        // Do NOT reset x: pixel output position must continue from the
+        // current scanline position when the window starts mid-line.
+    }
+
+    @Override
     public void reset() {
         clear();
     }

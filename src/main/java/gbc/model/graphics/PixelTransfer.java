@@ -71,7 +71,7 @@ public class PixelTransfer {
             int windowStartX = memory.getWx() - 7;
             windowPixelsToDrop = Math.max(0, -windowStartX);
             windowDroppedPixels = 0;
-            fifo.clear();
+            fifo.clearForWindow();
             fetcher.init();
             startFetchingWindow();
         }
@@ -79,8 +79,12 @@ public class PixelTransfer {
         // Run fetcher
         fetcher.tick();
 
-        // Check for sprites to add
-        if (!fetcher.spriteInProgress() && spritesEnabled()) {
+        // Check for sprites to add.
+        // Sprites must not be scheduled until SCX fine-scroll drops are complete;
+        // otherwise the overlay is placed over scroll pixels that will be discarded,
+        // shifting every sprite left by SCX%8 pixels.
+        boolean scrollComplete = windowActive || droppedPixels >= (getScx() % 8);
+        if (!fetcher.spriteInProgress() && spritesEnabled() && scrollComplete) {
             int bestIndex = -1;
             int bestX = Integer.MAX_VALUE;
             int bestOamIndex = Integer.MAX_VALUE;
