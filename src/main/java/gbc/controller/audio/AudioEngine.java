@@ -1,10 +1,9 @@
 package gbc.controller.audio;
 
-import gbc.controller.config.AppConfig;
-import gbc.model.GameBoyColor;
-
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import gbc.model.GameBoyColor;
 
 /**
  * Audio engine facade that delegates to a configurable backend
@@ -20,26 +19,22 @@ public final class AudioEngine implements AutoCloseable {
     }
 
     public synchronized void start(GameBoyColor gbc) {
-        if (backend != null) return;
-        String backendName = AppConfig.get().getConfig().getAudioBackend();
-        if ("javax".equalsIgnoreCase(backendName)) {
-            backend = new JavaxAudioEngine();
-            LOGGER.info("Using javax.sound audio backend");
-        } else {
-            try {
-                backend = new OpenAlAudioEngine();
-                LOGGER.info("Using OpenAL audio backend");
-            } catch (Throwable e) {
-                LOGGER.log(Level.WARNING, "OpenAL unavailable, falling back to javax.sound", e);
-                backend = new JavaxAudioEngine();
-            }
+        if (backend != null)
+            return;
+        try {
+            backend = new OpenAlAudioEngine();
+            LOGGER.info("Using OpenAL audio backend");
+            backend.start(gbc);
+        } catch (Throwable e) {
+            LOGGER.log(Level.WARNING, "OpenAL unavailable, audio disabled", e);
+            backend = null;
         }
-        backend.start(gbc);
     }
 
     public void setPaused(boolean value) {
         AudioBackend b = backend;
-        if (b != null) b.setPaused(value);
+        if (b != null)
+            b.setPaused(value);
     }
 
     public synchronized void stop() {
@@ -59,8 +54,13 @@ public final class AudioEngine implements AutoCloseable {
         return b != null ? b.getLastWriteNs() : 0;
     }
 
-    public int getLastAvailableBytes() {
+    public int getBufferedBytes() {
         AudioBackend b = backend;
-        return b != null ? b.getLastAvailableBytes() : 0;
+        return b != null ? b.getBufferedBytes() : 0;
+    }
+
+    public int getBufferCapacityBytes() {
+        AudioBackend b = backend;
+        return b != null ? b.getBufferCapacityBytes() : 0;
     }
 }

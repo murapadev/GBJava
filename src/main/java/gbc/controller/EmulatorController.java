@@ -467,7 +467,13 @@ public class EmulatorController implements EmulatorActions {
 
         // Selectively restart only the subsystems whose settings changed
         if (audioChanged(old, config)) {
-            audioEngine.restart(gbc);
+            emulationLock.lock();
+            try {
+                gbc.getMemory().reloadApuAudioSettings();
+                audioEngine.restart(gbc);
+            } finally {
+                emulationLock.unlock();
+            }
             LOGGER.info("Audio engine restarted (settings changed)");
         }
         if (inputChanged(old, config)) {

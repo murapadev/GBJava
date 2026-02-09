@@ -118,14 +118,14 @@ public class EmulationLoop {
                 // adds a gentle throttle based on audio pipeline headroom.
                 if (settings.audioSyncEnabled()) {
                     long lastWrite = audioEngine.getLastWriteNs();
-                    int available = audioEngine.getLastAvailableBytes();
+                    int buffered = audioEngine.getBufferedBytes();
+                    int capacity = audioEngine.getBufferCapacityBytes();
                     if (lastWrite > 0) {
                         if (System.nanoTime() - lastWrite > settings.audioSyncIdleNs()) {
                             TimeUnit.NANOSECONDS.sleep(settings.audioSyncSleepNs());
-                        } else if (available > 0) {
-                            int bufferSize = settings.audioBufferSize();
-                            int threshold = bufferSize / settings.audioSyncThresholdDivisor();
-                            if (available > threshold) {
+                        } else if (capacity > 0) {
+                            int threshold = capacity / settings.audioSyncThresholdDivisor();
+                            if (buffered >= threshold) {
                                 TimeUnit.NANOSECONDS.sleep(settings.audioSyncSleepNs());
                             }
                         }

@@ -1,16 +1,5 @@
 package gbc.controller.audio;
 
-import gbc.controller.config.AppConfig;
-import gbc.controller.config.EmulatorConfig;
-import gbc.model.GameBoyColor;
-
-import org.lwjgl.openal.AL;
-import org.lwjgl.openal.AL10;
-import org.lwjgl.openal.ALC;
-import org.lwjgl.openal.ALC10;
-import org.lwjgl.openal.ALCCapabilities;
-import org.lwjgl.system.MemoryUtil;
-
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
@@ -23,12 +12,23 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.lwjgl.openal.AL;
+import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.ALC;
+import org.lwjgl.openal.ALC10;
+import org.lwjgl.openal.ALCCapabilities;
+import org.lwjgl.system.MemoryUtil;
+
+import gbc.controller.config.AppConfig;
+import gbc.controller.config.EmulatorConfig;
+import gbc.model.GameBoyColor;
+
 /**
  * Streams APU samples to the host audio device via LWJGL OpenAL.
  * Uses a streaming buffer queue for low-latency audio output.
  * <p>
  * The APU produces large buffers (e.g. 2048 stereo frames) but this engine
- * uses smaller OpenAL buffers (512 frames) for lower latency.  A residual
+ * uses smaller OpenAL buffers (512 frames) for lower latency. A residual
  * byte array bridges the size mismatch.
  */
 public final class OpenAlAudioEngine implements AudioBackend {
@@ -36,8 +36,10 @@ public final class OpenAlAudioEngine implements AudioBackend {
     private static final int NUM_BUFFERS = 6;
     /** OpenAL buffer size in stereo frames – kept small for low latency. */
     private static final int AL_BUFFER_FRAMES = 512;
-    /** Noise gate threshold (signed 8-bit). Samples within ±GATE of silence
-     *  are zeroed to suppress DC-filter quantisation artifacts. */
+    /**
+     * Noise gate threshold (signed 8-bit). Samples within ±GATE of silence
+     * are zeroed to suppress DC-filter quantisation artifacts.
+     */
     private static final int NOISE_GATE = 1;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -60,12 +62,15 @@ public final class OpenAlAudioEngine implements AudioBackend {
     private int residualLen;
 
     private volatile long lastWriteNs;
-    private volatile int lastAvailableBytes;
+    private volatile int lastBufferedBytes;
+    private volatile int bufferCapacityBytes;
 
     @Override
     public synchronized void start(GameBoyColor gbc) {
-        if (isDisabled()) return;
-        if (running.get()) return;
+        if (isDisabled())
+            return;
+        if (running.get())
+            return;
 
         readSettings();
 
@@ -115,10 +120,19 @@ public final class OpenAlAudioEngine implements AudioBackend {
     }
 
     @Override
-    public long getLastWriteNs() { return lastWriteNs; }
+    public long getLastWriteNs() {
+        return lastWriteNs;
+    }
 
     @Override
-    public int getLastAvailableBytes() { return lastAvailableBytes; }
+    public int getBufferedBytes() {
+        return lastBufferedBytes;
+    }
+
+    @Override
+    public int getBufferCapacityBytes() {
+        return bufferCapacityBytes;
+    }
 
     private void readSettings() {
         EmulatorConfig cfg = AppConfig.get().getConfig();
@@ -131,11 +145,12 @@ public final class OpenAlAudioEngine implements AudioBackend {
         } else {
             this.bufferFrames = 2048;
         }
+        this.bufferCapacityBytes = NUM_BUFFERS * AL_BUFFER_FRAMES * 4;
     }
 
     /**
      * Runs entirely on the audio thread so all OpenAL calls happen in a single
-     * thread context.  Initialisation, the pump loop, and cleanup are all here.
+     * thread context. Initialisation, the pump loop, and cleanup are all here.
      */
     private void runAudioThread(GameBoyColor gbc) {
         ShortBuffer pcmBuffer = null;
@@ -245,7 +260,7 @@ public final class OpenAlAudioEngine implements AudioBackend {
 
             int processed = AL10.alGetSourcei(alSource, AL10.AL_BUFFERS_PROCESSED);
             if (processed <= 0) {
-                lastAvailableBytes = 0; // pipeline full, no space
+                updateBufferedBytes();
                 LockSupport.parkNanos(100_000L);
                 continue;
             }
@@ -261,7 +276,8 @@ public final class OpenAlAudioEngine implements AudioBackend {
                     // Refill residual from APU when exhausted
                     if (residualPos >= residualLen) {
                         byte[] samples = gbc.isAudioBufferFull()
-                                ? gbc.fetchAudioSamples() : null;
+                                ? gbc.fetchAudioSamples()
+                                : null;
                         if (samples != null && samples.length > 0) {
                             if (samples.length > residual.length) {
                                 residual = new byte[samples.length];
@@ -306,9 +322,7 @@ public final class OpenAlAudioEngine implements AudioBackend {
                 }
             }
 
-            // Update available-bytes for EmulationLoop audio sync
-            int stillProcessed = AL10.alGetSourcei(alSource, AL10.AL_BUFFERS_PROCESSED);
-            lastAvailableBytes = stillProcessed * AL_BUFFER_FRAMES * 4;
+            updateBufferedBytes();
 
             // Recover from underrun
             state = AL10.alGetSourcei(alSource, AL10.AL_SOURCE_STATE);
@@ -316,6 +330,11 @@ public final class OpenAlAudioEngine implements AudioBackend {
                 AL10.alSourcePlay(alSource);
             }
         }
+    }
+
+    private void updateBufferedBytes() {
+        int queued = AL10.alGetSourcei(alSource, AL10.AL_BUFFERS_QUEUED);
+        lastBufferedBytes = queued * AL_BUFFER_FRAMES * 4;
     }
 
     private boolean isDisabled() {

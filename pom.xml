@@ -28,6 +28,8 @@
         <ikonli.version>12.3.1</ikonli.version>
         <jinput.version>2.0.9</jinput.version>
         <junit.version>5.10.0</junit.version>
+        <lwjgl.version>3.3.3</lwjgl.version>
+        <lwjgl.natives>${os.detected.classifier}</lwjgl.natives>
 
         <!-- Plugin versions -->
         <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
@@ -35,6 +37,18 @@
         <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
         <exec-maven-plugin.version>3.2.0</exec-maven-plugin.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.lwjgl</groupId>
+                <artifactId>lwjgl-bom</artifactId>
+                <version>${lwjgl.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Logging -->
@@ -108,6 +122,16 @@
             <classifier>natives-all</classifier>
         </dependency>
 
+        <!-- Audio (OpenAL via LWJGL) -->
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-openal</artifactId>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -119,6 +143,12 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>1.7.1</version>
+                <extensions>true</extensions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

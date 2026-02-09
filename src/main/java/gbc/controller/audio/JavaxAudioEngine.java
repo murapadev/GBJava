@@ -46,7 +46,8 @@ public final class JavaxAudioEngine implements AudioBackend {
     private static final double TEST_FREQ = 440.0;
     private int sampleRate;
     private int bufferSize;
-    private volatile int lastAvailableBytes;
+    private volatile int lastBufferedBytes;
+    private volatile int bufferCapacityBytes;
     private volatile long lastWriteNs;
 
     public JavaxAudioEngine() {
@@ -191,7 +192,7 @@ public final class JavaxAudioEngine implements AudioBackend {
                         if (written > 0) {
                             lastWriteNs = System.nanoTime();
                         }
-                        lastAvailableBytes = line.available();
+                        updateBufferedBytes();
                         buffersWritten++;
                         long now = System.nanoTime();
                         if (audioDebug && now - lastBufferLogNs > TimeUnit.SECONDS.toNanos(2)) {
@@ -216,8 +217,13 @@ public final class JavaxAudioEngine implements AudioBackend {
     }
 
     @Override
-    public int getLastAvailableBytes() {
-        return lastAvailableBytes;
+    public int getBufferedBytes() {
+        return lastBufferedBytes;
+    }
+
+    @Override
+    public int getBufferCapacityBytes() {
+        return bufferCapacityBytes;
     }
 
     private void writeTestTone() {
@@ -234,6 +240,18 @@ public final class JavaxAudioEngine implements AudioBackend {
             }
         }
         line.write(buf, 0, needed);
+    }
+
+    private void updateBufferedBytes() {
+        if (line == null) {
+            lastBufferedBytes = 0;
+            bufferCapacityBytes = 0;
+            return;
+        }
+        int capacity = line.getBufferSize();
+        int available = line.available();
+        bufferCapacityBytes = capacity;
+        lastBufferedBytes = Math.max(0, capacity - available);
     }
 
     private void shutdownExecutor() {
@@ -355,12 +373,18 @@ public final class JavaxAudioEngine implements AudioBackend {
         int bits = format.getSampleSizeInBits();
         int channels = format.getChannels();
         float rate = format.getSampleRate();
-        if (signed) score += 4;
-        if (bits == 16) score += 4;
-        else if (bits == 8) score += 2;
-        if (channels == 2) score += 3;
-        else if (channels == 1) score += 2;
-        if (Math.abs(rate - sampleRate) < 1) score += 3;
+        if (signed)
+            score += 4;
+        if (bits == 16)
+            score += 4;
+        else if (bits == 8)
+            score += 2;
+        if (channels == 2)
+            score += 3;
+        else if (channels == 1)
+            score += 2;
+        if (Math.abs(rate - sampleRate) < 1)
+            score += 3;
         return score;
     }
 

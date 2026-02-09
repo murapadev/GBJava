@@ -27,9 +27,9 @@ public class Apu {
     // Precalculated volume factors (updated when NR50 changes)
     private float leftVolumeFactor, rightVolumeFactor;
 
-    private final byte[][] buffers;
-    private final byte[] stagingBuffer;
-    private final int bufferSize;
+    private byte[][] buffers;
+    private byte[] stagingBuffer;
+    private int bufferSize;
     private int bufferPosition;
     private int writeBufferIndex;
     private int readBufferIndex;
@@ -38,7 +38,7 @@ public class Apu {
     private int frameSequencer;
     private int frameSequencerCycleCounter;
     private boolean enabled;
-    private final int cyclesPerSample;
+    private volatile int cyclesPerSample;
     private boolean cgbMode;
     private float leftHpfPrevInput;
     private float rightHpfPrevInput;
@@ -79,17 +79,7 @@ public class Apu {
         this.channel2 = new SquareChannel(0xFF16, 0xFF17, false, 0xFF18, 0xFF19);
         this.channel3 = new WaveChannel();
         this.channel4 = new NoiseChannel();
-        int sampleRate = Integer.getInteger("audio.sampleRate", 44_100);
-        this.cyclesPerSample = Math.max(1, (int) Math.round(4_194_304.0 / sampleRate));
-        int configuredSize = Integer.getInteger("audio.bufferSize", 4096);
-        int safeSize = Math.max(512, configuredSize);
-        if ((safeSize & 1) != 0) {
-            safeSize++;
-        }
-        this.bufferSize = safeSize;
-        int bufferCount = Math.max(2, Integer.getInteger("audio.bufferCount", 8));
-        this.buffers = new byte[bufferCount][bufferSize];
-        this.stagingBuffer = new byte[bufferSize];
+        reloadAudioSettings();
         this.useDcFilter = Boolean.parseBoolean(System.getProperty("audio.dcFilter", "true"));
         this.hpfCoeff = clamp(Float.parseFloat(System.getProperty("audio.dcFilterCoeff", "0.995")), 0.90f, 0.9999f);
         this.dmgMixGain = clamp(Float.parseFloat(System.getProperty("audio.dmgMixGain", "1.0")), 0.1f, 2.0f);
@@ -97,6 +87,35 @@ public class Apu {
         updatePanningCache();
         updateVolumeCache();
         setCgbMode(false);
+    }
+
+    public void reloadAudioSettings() {
+        int sampleRate = Integer.getInteger("audio.sampleRate", 44_100);
+        int configuredSize = Integer.getInteger("audio.bufferSize", 4096);
+        int bufferCount = Math.max(2, Integer.getInteger("audio.bufferCount", 8));
+        configureAudio(sampleRate, configuredSize, bufferCount);
+    }
+
+    private void configureAudio(int sampleRate, int configuredSize, int bufferCount) {
+        int safeSize = Math.max(512, configuredSize);
+        if ((safeSize & 1) != 0) {
+            safeSize++;
+        }
+        cyclesPerSample = Math.max(1, (int) Math.round(4_194_304.0 / sampleRate));
+        synchronized (this) {
+            bufferSize = safeSize;
+            buffers = new byte[bufferCount][bufferSize];
+            stagingBuffer = new byte[bufferSize];
+            bufferPosition = 0;
+            queuedBuffers = 0;
+            writeBufferIndex = 0;
+            readBufferIndex = 0;
+            notifyAll();
+        }
+        cycleCounter = 0;
+        resetDcFilter();
+        wasSilent = true;
+        invalidateSampleCache();
     }
 
     public void setCgbMode(boolean cgbMode) {
@@ -208,7 +227,7 @@ public class Apu {
 
         // Output true silence when all channels are silent to avoid DC filter noise
         if (cachedIsSilent) {
-            stagingBuffer[bufferPosition++] = (byte) 128;  // Silence for unsigned 8-bit audio
+            stagingBuffer[bufferPosition++] = (byte) 128; // Silence for unsigned 8-bit audio
             stagingBuffer[bufferPosition++] = (byte) 128;
             // Only reset HPF on a real transition to silence, not on every
             // momentary zero-crossing caused by duty cycle / LFSR phases.

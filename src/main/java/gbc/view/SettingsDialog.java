@@ -7,8 +7,6 @@ import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,8 +17,6 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.Mixer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -55,7 +51,6 @@ public class SettingsDialog extends JDialog {
     private final Path profilesDir = Path.of("profiles");
 
     private JComboBox<String> profilesCombo;
-    private JComboBox<String> mixerCombo;
     private JComboBox<String> joystickCombo;
     private final Map<String, JTextField> joystickBindings = new LinkedHashMap<>();
     private JLabel rebindHint;
@@ -167,7 +162,6 @@ public class SettingsDialog extends JDialog {
     private JPanel buildAudioTab() {
         JPanel panel = createFormPanel();
         addCheckbox(panel, "Enabled", "audio.enabled");
-        addCombo(panel, "Backend", "audio.backend", new String[] { "openal", "javax" });
         addInteger(panel, "Sample Rate", "audio.sampleRate", 8000, 96000, 1000);
         addInteger(panel, "Buffer Size", "audio.bufferSize", 128, 8192, 128);
         addInteger(panel, "Latency (ms)", "audio.latencyMs", 10, 250, 5);
@@ -240,11 +234,7 @@ public class SettingsDialog extends JDialog {
         // Audio advanced
         panel.add(createSectionLabel("Audio Advanced"), "span 2, gaptop 8, gapbottom 4, wrap");
         addCheckbox(panel, "Null Output", "gbc.audio.nullOutput");
-        mixerCombo = new JComboBox<>();
-        mixerCombo.setPreferredSize(new Dimension(200, 26));
-        addRow(panel, "Output Device", mixerCombo);
         addCheckbox(panel, "Debug Logs", "gbc.audio.debug");
-        addCheckbox(panel, "Test Tone", "gbc.audio.testTone");
 
         // Debug traces
         panel.add(createSectionLabel("Debug Traces"), "span 2, gaptop 8, gapbottom 4, wrap");
@@ -404,7 +394,6 @@ public class SettingsDialog extends JDialog {
             entry.loadFrom(props);
         }
         loadKeyBindings(props);
-        loadMixers(props);
         loadJoysticks(props);
         loadJoystickBindings(props);
         reloadProfiles();
@@ -427,7 +416,6 @@ public class SettingsDialog extends JDialog {
             defaultProperties.setProperty(entry.getKey(), entry.getValue());
         }
         defaultProperties.setProperty("input.joystick.device", "");
-        defaultProperties.setProperty("gbc.audio.mixer", "");
     }
 
     private void loadJoysticks() {
@@ -476,40 +464,6 @@ public class SettingsDialog extends JDialog {
         joystickCombo.setSelectedItem("auto");
     }
 
-    private void loadMixers(Properties props) {
-        if (mixerCombo == null) {
-            return;
-        }
-        mixerCombo.removeAllItems();
-        mixerCombo.addItem("Auto (recommended)");
-        mixerCombo.addItem("System Default");
-        try {
-            Mixer.Info[] mixers = AudioSystem.getMixerInfo();
-            for (Mixer.Info info : mixers) {
-                if (supportsSourceDataLine(AudioSystem.getMixer(info))) {
-                    mixerCombo.addItem(info.getName());
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        String current = props.getProperty("gbc.audio.mixer", "");
-        if (current == null || current.isBlank()) {
-            mixerCombo.setSelectedItem("Auto (recommended)");
-            return;
-        }
-        if ("system".equalsIgnoreCase(current)) {
-            mixerCombo.setSelectedItem("System Default");
-            return;
-        }
-        for (int i = 0; i < mixerCombo.getItemCount(); i++) {
-            if (current.equalsIgnoreCase(mixerCombo.getItemAt(i))) {
-                mixerCombo.setSelectedIndex(i);
-                return;
-            }
-        }
-        mixerCombo.setSelectedItem("Auto (recommended)");
-    }
-
     private void loadJoystickBindings(Properties props) {
         for (Map.Entry<String, JTextField> entry : joystickBindings.entrySet()) {
             String key = entry.getKey();
@@ -550,13 +504,13 @@ public class SettingsDialog extends JDialog {
             entry.applyTo(props);
         }
         applyKeyBindings(props);
-        applyMixerSelection(props);
         applyJoystickSelection(props);
         applyJoystickBindings(props);
 
         EmulatorConfig config = ConfigSerializer.fromProperties(props);
 
-        // Apply + optionally persist via controller (handles diffing + selective restart)
+        // Apply + optionally persist via controller (handles diffing + selective
+        // restart)
         if (controller != null) {
             controller.applyConfig(config, persist);
         } else {
@@ -599,183 +553,6 @@ public class SettingsDialog extends JDialog {
         }
     }
 
-    private void applyMixerSelection(Properties props) {
-        if (mixerCombo == null) {
-            return;
-        }
-        Object selected = mixerCombo.getSelectedItem();
-        if (selected == null) {
-            props.setProperty("gbc.audio.mixer", "");
-            return;
-        }
-        String text = selected.toString();
-        if ("Auto (recommended)".equalsIgnoreCase(text)) {
-            props.setProperty("gbc.audio.mixer", "");
-            return;
-        }
-        if ("System Default".equalsIgnoreCase(text)) {
-            props.setProperty("gbc.audio.mixer", "system");
-        } else {
-            props.setProperty("gbc.audio.mixer", text);
-        }
-    }
-
-    private void playTestTone() {
-        try {
-            javax.sound.sampled.SourceDataLine line = openTestLine();
-            javax.sound.sampled.AudioFormat format = line.getFormat();
-            int sampleRate = (int) format.getSampleRate();
-
-            line.start();
-
-            int durationMs = 800;
-            int frames = (int) ((durationMs / 1000.0) * sampleRate);
-            byte[] data = new byte[frames * format.getFrameSize()];
-            double freq = 880.0;
-
-            if (format.getSampleSizeInBits() == 16) {
-                for (int i = 0; i < frames; i++) {
-                    double t = i / (double) sampleRate;
-                    short sample = (short) (Math.sin(2.0 * Math.PI * freq * t) * 20000);
-                    int frameOffset = i * format.getFrameSize();
-                    for (int ch = 0; ch < format.getChannels(); ch++) {
-                        int idx = frameOffset + ch * 2;
-                        byte lo = (byte) (sample & 0xFF);
-                        byte hi = (byte) ((sample >> 8) & 0xFF);
-                        if (format.isBigEndian()) {
-                            data[idx] = hi;
-                            data[idx + 1] = lo;
-                        } else {
-                            data[idx] = lo;
-                            data[idx + 1] = hi;
-                        }
-                    }
-                }
-            } else {
-                boolean signed = format.getEncoding().toString().toUpperCase().contains("SIGNED");
-                for (int i = 0; i < frames; i++) {
-                    double t = i / (double) sampleRate;
-                    int sample = (int) (Math.sin(2.0 * Math.PI * freq * t) * 100);
-                    if (!signed) {
-                        sample += 128;
-                    }
-                    int frameOffset = i * format.getFrameSize();
-                    for (int ch = 0; ch < format.getChannels(); ch++) {
-                        data[frameOffset + ch] = (byte) sample;
-                    }
-                }
-            }
-
-            line.write(data, 0, data.length);
-            line.drain();
-            line.stop();
-            line.close();
-        } catch (Exception e) {
-            window.showMessage("Audio test failed: " + e.getMessage(), "Audio Test",
-                    javax.swing.JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private javax.sound.sampled.SourceDataLine openTestLine() throws Exception {
-        Object selected = mixerCombo != null ? mixerCombo.getSelectedItem() : null;
-        javax.sound.sampled.Mixer mixer = null;
-        if (selected != null
-                && !"Auto (recommended)".equalsIgnoreCase(selected.toString())
-                && !"System Default".equalsIgnoreCase(selected.toString())) {
-            javax.sound.sampled.Mixer.Info[] mixers = AudioSystem.getMixerInfo();
-            for (javax.sound.sampled.Mixer.Info mix : mixers) {
-                if (selected.toString().equalsIgnoreCase(mix.getName())) {
-                    mixer = AudioSystem.getMixer(mix);
-                    break;
-                }
-            }
-        }
-
-        if (mixer != null) {
-            javax.sound.sampled.SourceDataLine line = openLineFromMixer(mixer);
-            if (line != null) {
-                return line;
-            }
-        }
-
-        javax.sound.sampled.AudioFormat[] formats = new javax.sound.sampled.AudioFormat[] {
-                new javax.sound.sampled.AudioFormat(44100, 16, 2, true, false),
-                new javax.sound.sampled.AudioFormat(44100, 16, 2, true, true),
-                new javax.sound.sampled.AudioFormat(44100, 16, 1, true, false),
-                new javax.sound.sampled.AudioFormat(44100, 16, 1, true, true),
-                new javax.sound.sampled.AudioFormat(48000, 16, 2, true, false),
-                new javax.sound.sampled.AudioFormat(48000, 16, 2, true, true),
-                new javax.sound.sampled.AudioFormat(48000, 16, 1, true, false),
-                new javax.sound.sampled.AudioFormat(48000, 16, 1, true, true),
-                new javax.sound.sampled.AudioFormat(44100, 8, 1, true, false),
-                new javax.sound.sampled.AudioFormat(44100, 8, 1, false, false),
-                new javax.sound.sampled.AudioFormat(22050, 8, 1, true, false)
-        };
-
-        Exception last = null;
-        for (javax.sound.sampled.AudioFormat format : formats) {
-            javax.sound.sampled.DataLine.Info info = new javax.sound.sampled.DataLine.Info(
-                    javax.sound.sampled.SourceDataLine.class, format);
-            try {
-                javax.sound.sampled.SourceDataLine line;
-                if (AudioSystem.isLineSupported(info)) {
-                    line = (javax.sound.sampled.SourceDataLine) AudioSystem.getLine(info);
-                } else {
-                    continue;
-                }
-                int bufferSize = Math.max(256, AppConfig.get().getConfig().getAudioBufferSize());
-                line.open(format, bufferSize);
-                return line;
-            } catch (Exception e) {
-                last = e;
-            }
-        }
-        if (last != null) {
-            throw last;
-        }
-        throw new IllegalStateException("No supported audio output format found.");
-    }
-
-    private boolean supportsSourceDataLine(javax.sound.sampled.Mixer mixer) {
-        if (mixer == null) {
-            return false;
-        }
-        for (javax.sound.sampled.Line.Info info : mixer.getSourceLineInfo()) {
-            if (info instanceof javax.sound.sampled.DataLine.Info dataInfo) {
-                if (javax.sound.sampled.SourceDataLine.class.isAssignableFrom(dataInfo.getLineClass())) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private javax.sound.sampled.SourceDataLine openLineFromMixer(javax.sound.sampled.Mixer mixer) {
-        for (javax.sound.sampled.Line.Info info : mixer.getSourceLineInfo()) {
-            if (info instanceof javax.sound.sampled.DataLine.Info dataInfo) {
-                if (!javax.sound.sampled.SourceDataLine.class.isAssignableFrom(dataInfo.getLineClass())) {
-                    continue;
-                }
-                javax.sound.sampled.AudioFormat[] formats = dataInfo.getFormats();
-                if (formats == null || formats.length == 0) {
-                    continue;
-                }
-                for (javax.sound.sampled.AudioFormat format : formats) {
-                    try {
-                        javax.sound.sampled.SourceDataLine line = (javax.sound.sampled.SourceDataLine) mixer.getLine(
-                                new javax.sound.sampled.DataLine.Info(javax.sound.sampled.SourceDataLine.class,
-                                        format));
-                        int bufferSize = Math.max(256, AppConfig.get().getConfig().getAudioBufferSize());
-                        line.open(format, bufferSize);
-                        return line;
-                    } catch (Exception ignored) {
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
     private void applyKeyBindings(Properties props) {
         clearExistingBindings(props, keyBindings.keySet());
         for (BindingEntry entry : keyBindings.values()) {
@@ -803,11 +580,6 @@ public class SettingsDialog extends JDialog {
             props.remove(key);
         }
     }
-
-    // applyToRuntime() removed - the controller's applyConfig() handles
-    // all subsystem updates (video, audio, input, theme) via smart diffing.
-
-    // Serialization is now handled by ConfigSerializer - no hardcoded key lists.
 
     /** Provide a list of axis names available on the resolved joystick. */
     public List<String> getAvailableAxes() {
@@ -1135,7 +907,6 @@ public class SettingsDialog extends JDialog {
             entry.applyTo(props);
         }
         applyKeyBindings(props);
-        applyMixerSelection(props);
         applyJoystickSelection(props);
         applyJoystickBindings(props);
         EmulatorConfig profileConfig = ConfigSerializer.fromProperties(props);

@@ -392,6 +392,12 @@ public class Memory implements MemoryBus {
         apu.step(cycles);
     }
 
+    public void reloadApuAudioSettings() {
+        if (apu != null) {
+            apu.reloadAudioSettings();
+        }
+    }
+
     public boolean isAudioBufferFull() {
         return apu.isBufferFull();
     }
