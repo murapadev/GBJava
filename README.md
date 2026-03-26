@@ -1,49 +1,58 @@
-# gbc
+# 🕹️ GBJava
 
-A WIP GB emulator made from scratch in Java.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+![Java](https://img.shields.io/badge/Java-17+-blue)
+![Status](https://img.shields.io/badge/status-WIP-orange)
 
-## Project layout
+> A WIP Game Boy emulator made from scratch in Java.
 
-Single-module Maven project with source and tests under `src/`.
+---
 
-- `src/main/java/gbc/` – Emulator core, UI, and CLI entry point.
-- `src/main/resources/` – Runtime resources (palette data, etc.).
-- `src/test/java/gbc/` – Unit and acceptance tests.
-- `samples/` – Local ROMs used for manual testing.
-- `saves/` – Save files used manually.
-- `logs/` – Runtime logging artifacts (safe to purge).
+## 📋 Tabla de contenidos
 
-## Desktop UI
+- [Características](#-características)
+- [Instalación](#-instalación)
+- [Uso](#-uso)
+- [Contribución](#-contribución)
+- [Licencia](#-licencia)
 
-The Swing-based desktop shell includes a streamlined workflow for development and
-debugging:
+## ✨ Características
 
-- A primary toolbar with one-click access to opening ROMs, pausing/resuming,
-  stepping through instructions, resetting, capturing screenshots, and toggling
-  fullscreen.
-- Live display controls (scale, colour filters, scanlines, smoothing, aspect
-  lock) that stay in sync with the menu options.
-- A richer status strip that highlights the currently loaded ROM title, runtime
-  state, active speed multiplier, and instantaneous FPS.
-- Integrated shortcuts to the advanced debug and VRAM viewers, which now stay in
-  lockstep with the main emulator controller.
+- 🎮 **Emulador Game Boy**: Emulación completa desde cero
+- 🖥️ **Interfaz Swing**: UI de escritorio para desarrollo y debugging
+- 🛠️ **Herramientas Debug**: VRAM viewer, step-by-step execution
+- 💾 **Save States**: Sistema de guardados
+- 📊 **Estadísticas**: FPS, estado runtime, escala de color
 
-## Debugging (JDWP)
-
-Run the emulator with the debug profile so a debugger can attach:
+## 🛠️ Instalación
 
 ```bash
-mvn -Pdebug -DskipTests compile exec:exec
+# Clonar
+git clone https://github.com/murapadev/GBJava.git
+cd GBJava
+
+# Construir con Maven
+mvn clean package
 ```
 
-Optional flags:
+## 🚀 Uso
 
 ```bash
-# Change the debug port (default 5005)
-mvn -Pdebug -Ddebug.port=5006 -DskipTests compile exec:exec
+# Ejecutar
+java -jar target/gbc-1.0.jar rom.gb
 
-# Wait for the debugger to attach before starting
-mvn -Pdebug -Ddebug.suspend=y -DskipTests compile exec:exec
+# Con Maven
+mvn exec:java -Dexec.mainClass="gbc.Main"
 ```
 
-Attach your debugger to `localhost:5005` (or the port you chose).
+## 📝 Contribución
+
+Las contribuciones son bienvenidas. Abre un issue o pull request.
+
+## 📄 Licencia
+
+Este proyecto está licenciado bajo los términos de la licencia MIT.
+
+---
+
+*Hecho con ❤️ por [murapadev](https://github.com/murapadev)*
