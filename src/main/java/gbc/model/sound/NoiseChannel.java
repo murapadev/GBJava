@@ -202,10 +202,9 @@ public class NoiseChannel {
             lengthEnabled = (value >>> 6 & 0b1) != 0;
             boolean trigger = (value >>> 7) != 0;
 
-            // Extra length clocking quirk: when length enable transitions 0→1
-            // on an odd frame sequencer step, extra decrement occurs.
-            // frameSequencerStep is the step just executed; the quirk applies when
-            // the next one does not clock length.
+            // Extra length clocking quirk: enabling length while the next frame
+            // sequencer step does not clock length decrements it once more.
+            // frameSequencerStep is the step just executed.
             boolean onNonLengthStep = (frameSequencerStep & 1) == 0;
             if (!wasLengthEnabled && lengthEnabled && onNonLengthStep && lengthCounter > 0) {
                 lengthCounter--;

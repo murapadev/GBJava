@@ -26,7 +26,6 @@ public class ROM extends Cartridge {
 		}
 	}
 
-
 	@Override
 	public byte read(int address) {
 		if (address >= 0xA000 && address < 0xC000) {

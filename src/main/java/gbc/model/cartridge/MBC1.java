@@ -54,7 +54,6 @@ public class MBC1 extends Cartridge {
         return matches >= 1;
     }
 
-
     private int upperShift() {
         return multicart ? 4 : 5;
     }

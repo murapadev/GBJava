@@ -31,7 +31,6 @@ public class MBC5 extends Cartridge {
 		this.ramBankCount = ram == null ? 0 : Math.max(1, ram.length / RAM_BANK_SIZE);
 	}
 
-
 	@Override
 	public byte read(int address) {
 		if (address >= 0x0000 && address < 0x4000) {

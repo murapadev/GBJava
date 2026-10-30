@@ -32,7 +32,6 @@ public class MBC3 extends Cartridge {
 		}
 	}
 
-
 	private void updateRtc() {
 		long now = System.currentTimeMillis();
 		if (lastRtcUpdateMs == 0) {
