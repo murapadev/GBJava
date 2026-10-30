@@ -28,12 +28,13 @@ class SoundRegisterSemanticsTest {
     @Test
     void sweepUsesTriggeredFrequencyWhenShiftIsZero() {
         final boolean[] disabled = { false };
-        Sweep sweep = new Sweep(() -> disabled[0] = true);
+        final int[] written = { -1 };
+        Sweep sweep = new Sweep(() -> disabled[0] = true, f -> written[0] = f);
         sweep.writeByte(0xFF10, 0x10); // period=1, decrease=0, shift=0
-        sweep.triggerEvent(1024);
+        sweep.triggerEvent(512); // with shift=0 the overflow check sees 512+512, below 2048
+        sweep.step();
 
-        assertEquals(1024, sweep.getFrequency(2047),
-                "Sweep output should keep the triggered frequency when shift=0");
+        assertEquals(-1, written[0], "Sweep must not write back a frequency when shift=0");
         assertFalse(disabled[0], "No overflow/disable is expected for this setup");
     }
 

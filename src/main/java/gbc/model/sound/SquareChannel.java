@@ -45,7 +45,7 @@ public class SquareChannel {
         this.lengthDutyRegister = 0; // Will be set via writeByte
         this.volumeEnvelope = new VolumeEnvelope(volumeRegisterAddress);
         if (useSweep) {
-            this.sweep = new Sweep(this::disableChannel);
+            this.sweep = new Sweep(this::disableChannel, this::setFrequency);
         }
     }
 
@@ -70,9 +70,6 @@ public class SquareChannel {
             // Generate wave
             float[] duty = Apu.WAVE_DUTY[lengthDutyRegister >>> 6];
             int frequency = getFrequency();
-            if (sweep != null) {
-                frequency = sweep.getFrequency(frequency);
-            }
 
             frequencyTimer--;
             if (frequencyTimer <= 0) {
@@ -102,9 +99,6 @@ public class SquareChannel {
         }
 
         int frequency = getFrequency();
-        if (sweep != null) {
-            frequency = sweep.getFrequency(frequency);
-        }
         int period = (2048 - frequency) * 4;
         if (period <= 0)
             period = 1;
@@ -149,6 +143,11 @@ public class SquareChannel {
 
     private int getFrequency() {
         return freqLowRegister | ((freqHighRegister & 0b111) << 8);
+    }
+
+    private void setFrequency(int frequency) {
+        freqLowRegister = frequency & 0xFF;
+        freqHighRegister = (freqHighRegister & ~0b111) | ((frequency >>> 8) & 0b111);
     }
 
     private void triggerEvent() {

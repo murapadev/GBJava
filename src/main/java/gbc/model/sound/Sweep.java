@@ -1,73 +1,71 @@
 package gbc.model.sound;
 
+import java.util.function.IntConsumer;
+
 /**
- * Frequency sweep for channel 1
- * Handles automatic frequency changes over time
+ * Frequency sweep for channel 1.
+ * <p>
+ * Works on a shadow copy of the frequency taken at trigger time. Updated
+ * values are written back to the channel's NR13/NR14 frequency, so later
+ * writes to those registers change the pitch but not the sweep source.
  */
 public class Sweep {
     private int shadowFrequency;
     private int timer;
     private int period;
     private boolean enabled;
-    private int frequency;
     private int shift;
     private boolean decrementing;
     private boolean negateUsed;
     private final Runnable disableChannel;
+    private final IntConsumer writeFrequency;
 
     public Sweep(Runnable disableChannel) {
+        this(disableChannel, frequency -> {
+        });
+    }
+
+    public Sweep(Runnable disableChannel, IntConsumer writeFrequency) {
         this.disableChannel = disableChannel;
+        this.writeFrequency = writeFrequency;
     }
 
     public void step() {
         if (timer > 0) {
             timer--;
         }
-
-        if (timer == 0) {
-            timer = period > 0 ? period : 8;
-
-            if (enabled && shift > 0) {
-                int newFrequency = calculateFrequency();
-
-                if (newFrequency <= 2047 && shift > 0) {
-                    frequency = newFrequency;
-                    shadowFrequency = newFrequency;
-
-                    calculateFrequency(); // Check for overflow again
-                }
-            }
+        if (timer != 0) {
+            return;
+        }
+        timer = period > 0 ? period : 8;
+        if (!enabled || period == 0) {
+            return;
+        }
+        int newFrequency = calculateFrequency();
+        if (newFrequency <= 2047 && shift > 0) {
+            shadowFrequency = newFrequency;
+            writeFrequency.accept(newFrequency);
+            calculateFrequency(); // second calculation only checks for overflow
         }
     }
 
     private int calculateFrequency() {
-        int newFrequency = shadowFrequency >>> shift;
-
+        int delta = shadowFrequency >>> shift;
+        int newFrequency;
         if (decrementing) {
-            newFrequency = shadowFrequency - newFrequency;
-            if (shift > 0) {
-                negateUsed = true;
-            }
+            newFrequency = shadowFrequency - delta;
+            negateUsed = true;
         } else {
-            newFrequency = shadowFrequency + newFrequency;
+            newFrequency = shadowFrequency + delta;
         }
-
-        // Check for overflow
         if (newFrequency > 2047) {
             disableChannel.run();
-            enabled = false;
         }
-
         return newFrequency;
-    }
-
-    public int getFrequency(int unsweepedFrequency) {
-        return enabled ? frequency : unsweepedFrequency;
     }
 
     public void triggerEvent(int frequency) {
         shadowFrequency = frequency;
-        this.frequency = frequency;
         timer = period > 0 ? period : 8;
         enabled = period > 0 || shift > 0;
         negateUsed = false;
@@ -93,13 +91,13 @@ public class Sweep {
             throw new RuntimeException("Invalid address");
         }
         boolean wasDecrementing = decrementing;
-        decrementing = (value & 0b1000) > 0;
-        period = (value & 0b1110000) >>> 4;
+        decrementing = (value & 0b1000) != 0;
+        period = (value & 0b111_0000) >>> 4;
         shift = value & 0b111;
-        enabled = period > 0 || shift > 0;
+        // Leaving negate mode after a negate calculation since the last
+        // trigger disables the channel.
         if (wasDecrementing && !decrementing && negateUsed) {
             disableChannel.run();
-            enabled = false;
         }
     }
 }
