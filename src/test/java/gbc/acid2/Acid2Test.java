@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +20,7 @@ import gbc.model.cartridge.Cartridge;
 import gbc.model.cpu.CPU;
 import gbc.model.graphics.FrameBuffer;
 import gbc.model.memory.Memory;
+import gbc.testsupport.TestRoms;
 
 /**
  * Test harness for dmg-acid2 and cgb-acid2 visual test ROMs.
@@ -40,7 +40,7 @@ class Acid2Test {
 
     @Test
     void dmgAcid2() throws Exception {
-        Path romPath = Paths.get("samples", "roms", "dmg-acid2.gb");
+        Path romPath = TestRoms.resolve("dmg-acid2.gb");
         Assumptions.assumeTrue(Files.exists(romPath), "Missing dmg-acid2.gb");
 
         Acid2Result result = runAcid2(romPath, HardwareType.DMG);
@@ -54,7 +54,7 @@ class Acid2Test {
 
     @Test
     void cgbAcid2() throws Exception {
-        Path romPath = Paths.get("samples", "roms", "cgb-acid2.gbc");
+        Path romPath = TestRoms.resolve("cgb-acid2.gbc");
         Assumptions.assumeTrue(Files.exists(romPath), "Missing cgb-acid2.gbc");
 
         Acid2Result result = runAcid2(romPath, HardwareType.CGB);

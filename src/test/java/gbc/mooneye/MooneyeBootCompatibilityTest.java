@@ -20,6 +20,7 @@ import gbc.model.GameBoyColor;
 import gbc.model.HardwareType;
 import gbc.model.cartridge.Cartridge;
 import gbc.model.cpu.Registers;
+import gbc.testsupport.TestRoms;
 
 /**
  * Mooneye acceptance subset focused on post-boot compatibility.
@@ -155,19 +156,13 @@ class MooneyeBootCompatibilityTest {
     }
 
     private static Path locateMooneyeRoot() {
-        Path candidate = Paths.get("..", "mooneye-test-suite");
-        if (Files.isDirectory(candidate)) {
-            return candidate.normalize();
-        }
-        Path alternative = Paths.get("mooneye-test-suite");
-        if (Files.isDirectory(alternative)) {
-            return alternative.normalize();
-        }
-        Path samplesPath = Paths.get("samples", "roms", "mooneye-test-suite");
-        if (Files.isDirectory(samplesPath)) {
-            return samplesPath.normalize();
-        }
-        throw new IllegalStateException("Cannot locate mooneye-test-suite directory");
+        Path configured = TestRoms.resolve("mooneye-test-suite");
+        if (Files.isDirectory(configured))
+            return configured.normalize();
+        Path sibling = Paths.get("..", "mooneye-test-suite");
+        if (Files.isDirectory(sibling))
+            return sibling.normalize();
+        return configured;
     }
 
     private record MooneyeResult(boolean passed, Registers registers, String ioSnapshot, String failContext) {}

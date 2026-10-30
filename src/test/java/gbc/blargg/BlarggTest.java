@@ -21,22 +21,24 @@ import gbc.model.GameBoyColor;
 import gbc.model.HardwareType;
 import gbc.model.cartridge.Cartridge;
 import gbc.model.memory.Memory;
+import gbc.testsupport.TestRoms;
 
 /**
  * Test harness for Blargg's Game Boy test ROMs.
  * <p>
- * Blargg tests output results via serial port (0xFF01/0xFF02).
- * They write each character to SB (0xFF01), then write 0x81 to SC (0xFF02)
- * to trigger a transfer. The test captures this serial output and checks
- * for "Passed" or "Failed" strings.
- * <p>
- * Tests also display results on the LCD, but serial output is easier to
- * capture programmatically.
+ * Most Blargg tests print their result through the serial port (SB/SC), so
+ * the harness looks for "Passed"/"Failed" there. The ones that do not
+ * (mem_timing-2, halt_bug, interrupt_time) use the cartridge RAM protocol:
+ * signature DE B0 61 at $A001-$A003, status at $A000 (0x80 while running,
+ * 0 on success) and the result text from $A004.
  */
 class BlarggTest {
 
     private static final long MAX_CYCLES = 200_000_000L;
     private static final long MAX_DURATION_MS = 30_000L;
+    private static final int STATUS_PASSED = 0;
+    private static final int STATUS_SERIAL_FAILED = 1;
+    private static final int STATUS_TIMEOUT = -1;
 
     @ParameterizedTest(name = "cpu_instrs/{0}")
     @MethodSource("cpuInstrsRoms")
@@ -71,7 +73,8 @@ class BlarggTest {
     @ParameterizedTest(name = "interrupt_time/{0}")
     @MethodSource("interruptTimeRoms")
     void interruptTime(String displayName, Path romPath) throws Exception {
-        runBlarggTest(displayName, romPath);
+        // interrupt_time measures CGB double-speed timing; it always fails on DMG.
+        runBlarggTest(displayName, romPath, HardwareType.CGB);
     }
 
     // --- ROM providers ---
@@ -136,54 +139,39 @@ class BlarggTest {
 
     private static Path locateBlarggRoot() {
         Path[] candidates = {
-                Paths.get("samples", "roms", "blargg", "gb-test-roms-master"),
-                Paths.get("samples", "roms", "blargg"),
+                TestRoms.resolve("blargg", "gb-test-roms-master"),
+                TestRoms.resolve("blargg"),
         };
         for (Path p : candidates) {
             if (Files.isDirectory(p))
                 return p;
         }
-        return Paths.get("samples", "roms", "blargg", "gb-test-roms-master");
+        return TestRoms.resolve("blargg", "gb-test-roms-master");
     }
 
     // --- Test execution ---
 
     private void runBlarggTest(String displayName, Path romPath) throws IOException {
+        runBlarggTest(displayName, romPath, HardwareType.DMG);
+    }
+
+    private void runBlarggTest(String displayName, Path romPath, HardwareType hardware) throws IOException {
         Assumptions.assumeTrue(Files.exists(romPath), "Missing Blargg ROM: " + romPath);
 
-        BlarggResult result = executeBlarggRom(romPath);
-
-        String serial = result.serialOutput();
-
-        if (serial.contains("Passed")) {
+        BlarggResult result = executeBlarggRom(romPath, hardware);
+        if (result.status() == STATUS_PASSED) {
             return;
         }
 
-        // If no serial output, check WRAM for result text
-        // Blargg tests store output text in WRAM around 0xD000+
-        if (serial.isEmpty() || (!serial.contains("Passed") && !serial.contains("Failed"))) {
-            String wramText = result.wramText();
-            if (wramText.contains("Passed")) {
-                return;
-            }
-            if (wramText.contains("Failed") || !serial.isEmpty()) {
-                String output = serial.isEmpty() ? wramText : serial;
-                Assertions.fail(String.format(
-                        "Blargg test failed: %s\ncycles=%d, instructions=%d\nOutput:\n%s",
-                        displayName, result.cycles(), result.instructions(), output));
-            }
-        }
-
-        String message = String.format(
-                "Blargg test did not pass: %s\ncycles=%d, instructions=%d\nSerial output:\n%s",
-                displayName, result.cycles(), result.instructions(), serial);
-
-        Assertions.fail(message);
+        String reason = result.status() == STATUS_TIMEOUT ? "timed out" : "failed (code " + result.status() + ")";
+        Assertions.fail(String.format(
+                "Blargg test %s: %s\ncycles=%d, instructions=%d\nOutput:\n%s",
+                reason, displayName, result.cycles(), result.instructions(), result.output()));
     }
 
-    private BlarggResult executeBlarggRom(Path romPath) throws IOException {
+    private BlarggResult executeBlarggRom(Path romPath, HardwareType hardware) throws IOException {
         GameBoyColor gbc = new GameBoyColor();
-        gbc.getMemory().setHardwareType(HardwareType.DMG);
+        gbc.getMemory().setHardwareType(hardware);
 
         Cartridge cartridge = new RomLoader().load(romPath);
         gbc.insertCartridge(cartridge);
@@ -191,8 +179,6 @@ class BlarggTest {
 
         Memory memory = gbc.getMemory();
         StringBuilder serialOutput = new StringBuilder();
-
-        // Use callback to capture serial output reliably
         memory.setSerialOutputCallback(value -> {
             if (value >= 0x20 && value < 0x7F || value == '\n' || value == '\r') {
                 serialOutput.append((char) value);
@@ -202,48 +188,62 @@ class BlarggTest {
         Instant start = Instant.now();
         long cycles = 0;
         long instructions = 0;
+        int status = STATUS_TIMEOUT;
 
         while (instructions < MAX_CYCLES
                 && Duration.between(start, Instant.now()).toMillis() < MAX_DURATION_MS) {
-
             int executed = gbc.executeCycle();
-            if (executed <= 0) {
-                cycles += 4;
-            } else {
-                cycles += executed;
-            }
+            cycles += executed <= 0 ? 4 : executed;
             instructions++;
 
-            // Check if test has completed (serial output contains result)
-            String output = serialOutput.toString();
-            if (output.contains("Passed") || output.contains("Failed")) {
+            if ((instructions & 0x3FF) != 0) {
+                continue;
+            }
+            String serial = serialOutput.toString();
+            if (serial.contains("Passed")) {
+                status = STATUS_PASSED;
                 break;
             }
-        }
-
-        // Extract text from WRAM for tests that don't use serial
-        String wramText = extractWramText(memory);
-
-        return new BlarggResult(cycles, instructions, serialOutput.toString(), wramText);
-    }
-
-    private String extractWramText(Memory memory) {
-        // Scan WRAM (0xC000-0xDFFF) for printable ASCII text containing "Passed" or
-        // "Failed"
-        StringBuilder sb = new StringBuilder();
-        for (int addr = 0xC000; addr <= 0xDFFF; addr++) {
-            int b = memory.readByte(addr) & 0xFF;
-            if (b >= 0x20 && b < 0x7F) {
-                sb.append((char) b);
-            } else if (b == 0x0A || b == 0x0D) {
-                sb.append('\n');
-            } else if (sb.length() > 0 && b == 0x00) {
-                sb.append(' ');
+            if (serial.contains("Failed")) {
+                status = STATUS_SERIAL_FAILED;
+                break;
+            }
+            // Tests without serial output report through cartridge RAM:
+            // signature DE B0 61 at $A001, status at $A000 (0x80 = running).
+            if (hasSramSignature(memory)) {
+                int code = memory.readByte(0xA000) & 0xFF;
+                if (code != 0x80) {
+                    status = code;
+                    break;
+                }
             }
         }
-        return sb.toString().trim();
+
+        String output = serialOutput.length() > 0 ? serialOutput.toString() : readSramText(memory);
+        return new BlarggResult(cycles, instructions, status, output);
     }
 
-    private record BlarggResult(long cycles, long instructions, String serialOutput, String wramText) {
+    private static boolean hasSramSignature(Memory memory) {
+        return (memory.readByte(0xA001) & 0xFF) == 0xDE
+                && (memory.readByte(0xA002) & 0xFF) == 0xB0
+                && (memory.readByte(0xA003) & 0xFF) == 0x61;
+    }
+
+    private static String readSramText(Memory memory) {
+        if (!hasSramSignature(memory)) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int addr = 0xA004; addr < 0xC000; addr++) {
+            int b = memory.readByte(addr) & 0xFF;
+            if (b == 0) {
+                break;
+            }
+            sb.append((char) b);
+        }
+        return sb.toString();
+    }
+
+    private record BlarggResult(long cycles, long instructions, int status, String output) {
     }
 }
