@@ -127,9 +127,9 @@ public class SquareChannel {
 
     /** Step length counter (called by frame sequencer) */
     public void stepLength() {
-        if (isLengthTimerEnabled()) {
+        if (isLengthTimerEnabled() && lengthTimer > 0) {
             lengthTimer--;
-            if (lengthTimer <= 0) {
+            if (lengthTimer == 0) {
                 disableChannel();
             }
         }
@@ -163,6 +163,11 @@ public class SquareChannel {
 
     private void disableChannel() {
         enabled = false;
+    }
+
+    /** Power-off clears duty but, on DMG, keeps the length counter. */
+    void clearDuty() {
+        lengthDutyRegister = 0;
     }
 
     public void setDutyPosition(int value) {
@@ -238,7 +243,9 @@ public class SquareChannel {
             // Extra length clocking quirk: when length enable transitions 0→1
             // on an odd frame sequencer step (1,3,5,7 — steps that don't clock length),
             // the length counter gets an extra decrement.
-            boolean onNonLengthStep = (frameSequencerStep & 1) != 0;
+            // frameSequencerStep is the step just executed; the quirk applies when
+            // the next one does not clock length.
+            boolean onNonLengthStep = (frameSequencerStep & 1) == 0;
             if (!wasLengthEnabled && nowLengthEnabled && onNonLengthStep && lengthTimer > 0) {
                 lengthTimer--;
                 if (lengthTimer == 0 && !trigger) {

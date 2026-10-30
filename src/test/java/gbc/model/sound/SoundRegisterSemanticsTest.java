@@ -38,13 +38,18 @@ class SoundRegisterSemanticsTest {
     }
 
     @Test
-    void lengthRegistersRemainWritableWhileApuDisabled() {
+    void lengthRegistersKeepLengthButNotDutyWhileApuDisabled() {
         Apu apu = new Apu();
         apu.writeRegister(0xFF26, 0x00); // ensure APU off
-        apu.writeRegister(0xFF11, 0xC0); // CH1 length/duty register
+        apu.writeRegister(0xFF11, 0xFF); // CH1 duty=3, length=1
 
-        assertEquals(0xFF, apu.readRegister(0xFF11),
-                "NR11 writes should be accepted while APU is disabled");
+        assertEquals(0x3F, apu.readRegister(0xFF11),
+                "DMG ignores NR11 duty bits while the APU is disabled");
+
+        apu.writeRegister(0xFF26, 0x80);
+        apu.writeRegister(0xFF12, 0xF0); // DAC on
+        apu.writeRegister(0xFF14, 0xC0); // trigger with the length of 1 loaded while off
+        assertEquals(0x01, apu.readRegister(0xFF26) & 0x01, "Channel 1 should be running");
     }
 
     @Test
@@ -99,6 +104,7 @@ class SoundRegisterSemanticsTest {
     @Test
     void noiseTriggerReloadsLengthCounterWhenZero() {
         NoiseChannel channel = new NoiseChannel();
+        channel.setFrameSequencerStep(1); // next step clocks length: no extra clocking quirk
         channel.writeByte(0xFF21, 0xF0); // DAC on, initial volume
         channel.writeByte(0xFF20, 0x3F); // length=1
         channel.writeByte(0xFF23, 0xC0); // trigger + length enable

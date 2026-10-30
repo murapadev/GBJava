@@ -77,7 +77,47 @@ class BlarggTest {
         runBlarggTest(displayName, romPath, HardwareType.CGB);
     }
 
+    // Suites that do not fully pass yet; opt in with -Dgbc.blargg.extended=true.
+
+    @ParameterizedTest(name = "dmg_sound/{0}")
+    @MethodSource("dmgSoundRoms")
+    void dmgSound(String displayName, Path romPath) throws Exception {
+        assumeExtended();
+        runBlarggTest(displayName, romPath);
+    }
+
+    @ParameterizedTest(name = "cgb_sound/{0}")
+    @MethodSource("cgbSoundRoms")
+    void cgbSound(String displayName, Path romPath) throws Exception {
+        assumeExtended();
+        runBlarggTest(displayName, romPath, HardwareType.CGB);
+    }
+
+    @ParameterizedTest(name = "oam_bug/{0}")
+    @MethodSource("oamBugRoms")
+    void oamBug(String displayName, Path romPath) throws Exception {
+        assumeExtended();
+        runBlarggTest(displayName, romPath);
+    }
+
+    private static void assumeExtended() {
+        Assumptions.assumeTrue(Boolean.getBoolean("gbc.blargg.extended"),
+                "Extended Blargg suites disabled (-Dgbc.blargg.extended=true)");
+    }
+
     // --- ROM providers ---
+
+    static Stream<Arguments> dmgSoundRoms() {
+        return romsFromPath("dmg_sound/rom_singles");
+    }
+
+    static Stream<Arguments> cgbSoundRoms() {
+        return romsFromPath("cgb_sound/rom_singles");
+    }
+
+    static Stream<Arguments> oamBugRoms() {
+        return romsFromPath("oam_bug/rom_singles");
+    }
 
     static Stream<Arguments> cpuInstrsRoms() {
         return romsFromPath("cpu_instrs/individual");

@@ -193,7 +193,9 @@ public class WaveChannel {
             boolean trigger = (value >>> 7) != 0;
 
             // Extra length clocking quirk
-            boolean onNonLengthStep = (frameSequencerStep & 1) != 0;
+            // frameSequencerStep is the step just executed; the quirk applies when
+            // the next one does not clock length.
+            boolean onNonLengthStep = (frameSequencerStep & 1) == 0;
             if (!wasLengthEnabled && lengthEnabled && onNonLengthStep && lengthCounter > 0) {
                 lengthCounter--;
                 if (lengthCounter == 0 && !trigger) {
