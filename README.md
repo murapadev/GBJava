@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ![Java](https://img.shields.io/badge/Java-21+-blue)
-![Status](https://img.shields.io/badge/status-WIP-orange)
+[![Status](https://img.shields.io/badge/status-beta-yellow)](#-estado-y-precisión)
 
-> A WIP Game Boy emulator made from scratch in Java.
+> A Game Boy / Game Boy Color emulator made from scratch in Java. Beta: CPU, timers, MBCs and the acid2 PPU tests pass; some APU and PPU timing edge cases remain (see [Estado y precisión](#-estado-y-precisión)).
 
 ---
 
