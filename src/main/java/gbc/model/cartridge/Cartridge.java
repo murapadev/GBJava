@@ -109,6 +109,37 @@ public abstract class Cartridge {
         return isNintendoLogoValid() && isHeaderChecksumValid();
     }
 
+    /**
+     * RAM size declared by the header (0x0149). Some test ROMs (blargg's
+     * halt_bug, interrupt_time) declare a "+RAM" cartridge type with a RAM
+     * size of 0 yet report results through $A000, so fall back to one 8 KiB
+     * bank when the type says RAM is present.
+     */
+    protected static int headerRamSize(byte[] data) {
+        if (data == null || data.length <= 0x0149) {
+            return 0;
+        }
+        int declared = switch (data[0x0149]) {
+            case 0x01 -> 2 * 1024;
+            case 0x02 -> 8 * 1024;
+            case 0x03 -> 32 * 1024;
+            case 0x04 -> 128 * 1024;
+            case 0x05 -> 64 * 1024;
+            default -> 0;
+        };
+        if (declared == 0 && typeHasRam(data[0x0147] & 0xFF)) {
+            return 8 * 1024;
+        }
+        return declared;
+    }
+
+    private static boolean typeHasRam(int type) {
+        return switch (type) {
+            case 0x02, 0x03, 0x08, 0x09, 0x0C, 0x0D, 0x10, 0x12, 0x13, 0x1A, 0x1B, 0x1D, 0x1E -> true;
+            default -> false;
+        };
+    }
+
     public byte[] getRam() {
         return ram;
     }
