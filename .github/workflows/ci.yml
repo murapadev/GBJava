@@ -22,4 +22,48 @@ jobs:
           cache: "maven"
 
       - name: Build and test
-        run: mvn clean verify -Pci
+        run: mvn -B clean verify -Pci
+
+  # Accuracy suites with freely distributed test ROMs (blargg, mooneye,
+  # dmg/cgb-acid2). They are downloaded at run time and never committed.
+  test-roms:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Download test ROMs
+        env:
+          BLARGG_REF: c240dd7d700e5c0b00a7bbba52b53e4ee67b5f15
+          MTS: mts-20240926-1737-443f6e1
+          DMG_ACID2_REF: 8a98ce731f96dde032ffb22ec36dc985d78fdb18
+          CGB_ACID2_REF: 04c6ca40cf75b6a93513fe596de4ab797efaff97
+        run: |
+          set -euo pipefail
+          roms="$RUNNER_TEMP/roms"
+          mkdir -p "$roms/blargg"
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o blargg.zip "https://github.com/retrio/gb-test-roms/archive/$BLARGG_REF.zip"
+          unzip -q blargg.zip -d "$roms/blargg"
+          mv "$roms/blargg/gb-test-roms-$BLARGG_REF" "$roms/blargg/gb-test-roms-master"
+          curl -fsSL -o mts.tar.xz "https://gekkio.fi/files/mooneye-test-suite/$MTS/$MTS.tar.xz"
+          tar -xJf mts.tar.xz -C "$roms"
+          mv "$roms/$MTS" "$roms/mooneye-test-suite"
+          curl -fsSL -o "$roms/dmg-acid2.gb" https://github.com/mattcurrie/dmg-acid2/releases/download/v1.0/dmg-acid2.gb
+          curl -fsSL -o "$roms/dmg-acid2-reference.png" "https://raw.githubusercontent.com/mattcurrie/dmg-acid2/$DMG_ACID2_REF/img/reference-dmg.png"
+          curl -fsSL -o "$roms/cgb-acid2.gbc" https://github.com/mattcurrie/cgb-acid2/releases/download/v1.1/cgb-acid2.gbc
+          curl -fsSL -o "$roms/cgb-acid2-reference.png" "https://raw.githubusercontent.com/mattcurrie/cgb-acid2/$CGB_ACID2_REF/img/reference.png"
+
+      - name: Run accuracy suites
+        run: >-
+          mvn -B test -Pci
+          -Dgbc.testRoms="$RUNNER_TEMP/roms"
+          -Dtest='BlarggTest,Acid2Test,MooneyeMbcTest,MooneyeBootCompatibilityTest'

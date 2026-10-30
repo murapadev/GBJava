@@ -22,6 +22,7 @@ import gbc.model.GameBoyColor;
 import gbc.model.HardwareType;
 import gbc.model.cartridge.Cartridge;
 import gbc.model.cpu.Registers;
+import gbc.testsupport.TestRoms;
 
 /**
  * Test harness for Mooneye emulator-only MBC (Memory Bank Controller) tests.
@@ -92,16 +93,13 @@ class MooneyeMbcTest {
     }
 
     private static Path locateMooneyeRoot() {
-        Path candidate = Paths.get("..", "mooneye-test-suite");
-        if (Files.isDirectory(candidate))
-            return candidate.normalize();
-        Path alt = Paths.get("mooneye-test-suite");
-        if (Files.isDirectory(alt))
-            return alt.normalize();
-        Path samples = Paths.get("samples", "roms", "mooneye-test-suite");
-        if (Files.isDirectory(samples))
-            return samples.normalize();
-        throw new IllegalStateException("Cannot locate mooneye-test-suite directory");
+        Path configured = TestRoms.resolve("mooneye-test-suite");
+        if (Files.isDirectory(configured))
+            return configured.normalize();
+        Path sibling = Paths.get("..", "mooneye-test-suite");
+        if (Files.isDirectory(sibling))
+            return sibling.normalize();
+        return configured;
     }
 
     private void runTest(String displayName, Path romPath) throws IOException {

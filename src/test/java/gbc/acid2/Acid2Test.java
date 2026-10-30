@@ -1,15 +1,20 @@
 package gbc.acid2;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.Map;
+
+import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -21,17 +26,16 @@ import gbc.model.cartridge.Cartridge;
 import gbc.model.cpu.CPU;
 import gbc.model.graphics.FrameBuffer;
 import gbc.model.memory.Memory;
+import gbc.testsupport.TestRoms;
 
 /**
  * Test harness for dmg-acid2 and cgb-acid2 visual test ROMs.
  * <p>
  * These tests render a reference image (a smiley face) when all PPU features
  * are implemented correctly. The test detects completion when the ROM executes
- * opcode 0x40 (LD B, B), then captures and checksums the framebuffer.
- * <p>
- * On first run with unknown checksum, the test will print the actual checksum
- * so it can be recorded. This allows detecting regressions even before a
- * pixel-perfect reference is achieved.
+ * opcode 0x40 (LD B, B), then captures the framebuffer. When the upstream
+ * reference image is placed next to the ROM ({@code dmg-acid2-reference.png},
+ * {@code cgb-acid2-reference.png}) the frame must match it pixel for pixel.
  */
 class Acid2Test {
 
@@ -40,7 +44,7 @@ class Acid2Test {
 
     @Test
     void dmgAcid2() throws Exception {
-        Path romPath = Paths.get("samples", "roms", "dmg-acid2.gb");
+        Path romPath = TestRoms.resolve("dmg-acid2.gb");
         Assumptions.assumeTrue(Files.exists(romPath), "Missing dmg-acid2.gb");
 
         Acid2Result result = runAcid2(romPath, HardwareType.DMG);
@@ -50,11 +54,50 @@ class Acid2Test {
         System.out.println("dmg-acid2 framebuffer SHA-256: " + result.sha256);
         System.out.println("dmg-acid2 completed after " + result.cycles + " cycles, "
                 + result.instructions + " instructions, " + result.frames + " frames");
+
+        // Reference image from the dmg-acid2 repository (img/reference-dmg.png).
+        assertMatchesReference(result, TestRoms.resolve("dmg-acid2-reference.png"));
+    }
+
+    private static void assertMatchesReference(Acid2Result result, Path reference) throws Exception {
+        if (!Files.exists(reference)) {
+            return;
+        }
+        BufferedImage image = ImageIO.read(reference.toFile());
+        int[] expected = image.getRGB(0, 0, FrameBuffer.WIDTH, FrameBuffer.HEIGHT, null, 0, FrameBuffer.WIDTH);
+        int mismatches = Math.max(countMappingMismatches(result.pixels, expected),
+                countMappingMismatches(expected, result.pixels));
+        assertEquals(0, mismatches, reference.getFileName() + ": pixels differing from the reference image");
+    }
+
+    /**
+     * Palette-independent comparison: every colour in {@code from} should map
+     * to a single colour in {@code to}. Counts the pixels that disagree with
+     * the majority mapping of their colour. Checked in both directions so two
+     * colours cannot collapse into one.
+     */
+    private static int countMappingMismatches(int[] from, int[] to) {
+        Map<Integer, Map<Integer, Integer>> mapping = new HashMap<>();
+        for (int i = 0; i < from.length; i++) {
+            mapping.computeIfAbsent(from[i] & 0xFFFFFF, k -> new HashMap<>())
+                    .merge(to[i] & 0xFFFFFF, 1, Integer::sum);
+        }
+        int mismatches = 0;
+        for (Map<Integer, Integer> targets : mapping.values()) {
+            int total = 0;
+            int best = 0;
+            for (int count : targets.values()) {
+                total += count;
+                best = Math.max(best, count);
+            }
+            mismatches += total - best;
+        }
+        return mismatches;
     }
 
     @Test
     void cgbAcid2() throws Exception {
-        Path romPath = Paths.get("samples", "roms", "cgb-acid2.gbc");
+        Path romPath = TestRoms.resolve("cgb-acid2.gbc");
         Assumptions.assumeTrue(Files.exists(romPath), "Missing cgb-acid2.gbc");
 
         Acid2Result result = runAcid2(romPath, HardwareType.CGB);
@@ -64,11 +107,15 @@ class Acid2Test {
         System.out.println("cgb-acid2 completed=" + result.completed + " after " + result.cycles
                 + " cycles, " + result.instructions + " instructions, " + result.frames + " frames");
 
-        // CGB acid2 completion is tracked but not required yet — CGB PPU
-        // emulation has known gaps that prevent the test ROM from finishing.
-        // The checksum is still captured for regression tracking.
-        if (!result.completed) {
-            System.out.println("WARNING: cgb-acid2 did not reach completion marker (known CGB limitation)");
+        // Reference image from the cgb-acid2 repository (img/reference.png).
+        // Only v1.1 of the ROM has the LD B,B breakpoint, so completion is
+        // required just when the reference is provided alongside it.
+        Path reference = TestRoms.resolve("cgb-acid2-reference.png");
+        if (Files.exists(reference)) {
+            assertTrue(result.completed, "cgb-acid2 v1.1 should reach the LD B,B completion marker");
+            assertMatchesReference(result, reference);
+        } else if (!result.completed) {
+            System.out.println("WARNING: cgb-acid2 did not reach the LD B,B marker (v1.0 has none)");
         }
     }
 
@@ -136,7 +183,7 @@ class Acid2Test {
         long frames = fb.getFrameId();
 
         gbc.closeTrace();
-        return new Acid2Result(completed, cycles, instructions, frames, sha256);
+        return new Acid2Result(completed, cycles, instructions, frames, sha256, fb.getPixels().clone());
     }
 
     private String computeFrameBufferHash(FrameBuffer fb) throws Exception {
@@ -153,6 +200,7 @@ class Acid2Test {
         return HexFormat.of().formatHex(md.digest());
     }
 
-    private record Acid2Result(boolean completed, long cycles, long instructions, long frames, String sha256) {
+    private record Acid2Result(boolean completed, long cycles, long instructions, long frames, String sha256,
+            int[] pixels) {
     }
 }

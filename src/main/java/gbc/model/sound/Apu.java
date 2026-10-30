@@ -309,32 +309,35 @@ public class Apu {
 
     private void enableAPU(boolean enable) {
         if (enabled && !enable) {
-            // Turn off - reset all registers
+            // Turn off - clear all registers. On DMG the length counters
+            // survive power-off; wave RAM is never affected.
             channel1.writeByte(0xFF10, 0);
-            channel1.writeByte(0xFF11, 0);
             channel1.writeByte(0xFF12, 0);
             channel1.writeByte(0xFF13, 0);
             channel1.writeByte(0xFF14, 0);
-            channel2.writeByte(0xFF16, 0);
             channel2.writeByte(0xFF17, 0);
             channel2.writeByte(0xFF18, 0);
             channel2.writeByte(0xFF19, 0);
             channel3.writeByte(0xFF1A, 0);
-            channel3.writeByte(0xFF1B, 0);
             channel3.writeByte(0xFF1C, 0);
             channel3.writeByte(0xFF1D, 0);
             channel3.writeByte(0xFF1E, 0);
-            channel4.writeByte(0xFF20, 0);
             channel4.writeByte(0xFF21, 0);
             channel4.writeByte(0xFF22, 0);
             channel4.writeByte(0xFF23, 0);
+            if (cgbMode) {
+                channel1.writeByte(0xFF11, 0);
+                channel2.writeByte(0xFF16, 0);
+                channel3.writeByte(0xFF1B, 0);
+                channel4.writeByte(0xFF20, 0);
+            } else {
+                channel1.clearDuty();
+                channel2.clearDuty();
+            }
             channelControlRegister = 0;
             channelSelectionRegister = 0;
             updatePanningCache();
             updateVolumeCache();
-            for (int i = 0xFF30; i < 0xFF40; i++) {
-                channel3.writeByte(i, 0);
-            }
             enabled = false;
             frameSequencer = 0;
             frameSequencerCycleCounter = 0;
@@ -353,9 +356,13 @@ public class Apu {
             wasSilent = true;
             invalidateSampleCache();
         } else if (!enabled && enable) {
-            // Turn on
+            // Turn on: the next frame sequencer step is 0.
             enabled = true;
-            frameSequencer = 0;
+            frameSequencer = 7;
+            channel1.setFrameSequencerStep(frameSequencer);
+            channel2.setFrameSequencerStep(frameSequencer);
+            channel3.setFrameSequencerStep(frameSequencer);
+            channel4.setFrameSequencerStep(frameSequencer);
             frameSequencerCycleCounter = 0;
             cycleCounter = 0;
             resetDcFilter();
@@ -434,11 +441,14 @@ public class Apu {
     }
 
     public void writeRegister(int address, int value) {
-        if (!enabled
-                && address != 0xFF26
-                && !isLengthRegister(address)
-                && (address < 0xFF30 || address >= 0xFF40)) {
-            return; // Ignore writes when APU is disabled
+        if (!enabled && address != 0xFF26 && (address < 0xFF30 || address >= 0xFF40)) {
+            // While powered off only DMG length counters stay writable.
+            if (cgbMode || !isLengthRegister(address)) {
+                return;
+            }
+            if (address == 0xFF11 || address == 0xFF16) {
+                value &= 0b0011_1111;
+            }
         }
 
         if (channel1.acceptsAddress(address)) {

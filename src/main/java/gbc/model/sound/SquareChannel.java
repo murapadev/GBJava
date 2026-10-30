@@ -8,8 +8,8 @@ package gbc.model.sound;
  * <p>
  * Implements hardware-accurate timing quirks:
  * <ul>
- * <li>Extra length clocking when enabling length counter on an odd frame
- * sequencer step</li>
+ * <li>Extra length clocking when enabling the length counter while the next
+ * frame sequencer step does not clock length</li>
  * <li>Trigger edge cases: length reload from 0, frequency timer reset, envelope
  * restart</li>
  * <li>Sweep negate-mode disable (handled in {@link Sweep})</li>
@@ -45,7 +45,7 @@ public class SquareChannel {
         this.lengthDutyRegister = 0; // Will be set via writeByte
         this.volumeEnvelope = new VolumeEnvelope(volumeRegisterAddress);
         if (useSweep) {
-            this.sweep = new Sweep(this::disableChannel);
+            this.sweep = new Sweep(this::disableChannel, this::setFrequency);
         }
     }
 
@@ -70,9 +70,6 @@ public class SquareChannel {
             // Generate wave
             float[] duty = Apu.WAVE_DUTY[lengthDutyRegister >>> 6];
             int frequency = getFrequency();
-            if (sweep != null) {
-                frequency = sweep.getFrequency(frequency);
-            }
 
             frequencyTimer--;
             if (frequencyTimer <= 0) {
@@ -102,9 +99,6 @@ public class SquareChannel {
         }
 
         int frequency = getFrequency();
-        if (sweep != null) {
-            frequency = sweep.getFrequency(frequency);
-        }
         int period = (2048 - frequency) * 4;
         if (period <= 0)
             period = 1;
@@ -127,9 +121,9 @@ public class SquareChannel {
 
     /** Step length counter (called by frame sequencer) */
     public void stepLength() {
-        if (isLengthTimerEnabled()) {
+        if (isLengthTimerEnabled() && lengthTimer > 0) {
             lengthTimer--;
-            if (lengthTimer <= 0) {
+            if (lengthTimer == 0) {
                 disableChannel();
             }
         }
@@ -151,6 +145,11 @@ public class SquareChannel {
         return freqLowRegister | ((freqHighRegister & 0b111) << 8);
     }
 
+    private void setFrequency(int frequency) {
+        freqLowRegister = frequency & 0xFF;
+        freqHighRegister = (freqHighRegister & ~0b111) | ((frequency >>> 8) & 0b111);
+    }
+
     private void triggerEvent() {
         enabled = true;
         dutyPosition = 0;
@@ -163,6 +162,11 @@ public class SquareChannel {
 
     private void disableChannel() {
         enabled = false;
+    }
+
+    /** Power-off clears duty but, on DMG, keeps the length counter. */
+    void clearDuty() {
+        lengthDutyRegister = 0;
     }
 
     public void setDutyPosition(int value) {
@@ -235,10 +239,10 @@ public class SquareChannel {
             boolean nowLengthEnabled = isLengthTimerEnabled();
             boolean trigger = (value & 0b1000_0000) != 0;
 
-            // Extra length clocking quirk: when length enable transitions 0→1
-            // on an odd frame sequencer step (1,3,5,7 — steps that don't clock length),
-            // the length counter gets an extra decrement.
-            boolean onNonLengthStep = (frameSequencerStep & 1) != 0;
+            // Extra length clocking quirk: enabling length while the next frame
+            // sequencer step does not clock length decrements it once more.
+            // frameSequencerStep is the step just executed.
+            boolean onNonLengthStep = (frameSequencerStep & 1) == 0;
             if (!wasLengthEnabled && nowLengthEnabled && onNonLengthStep && lengthTimer > 0) {
                 lengthTimer--;
                 if (lengthTimer == 0 && !trigger) {

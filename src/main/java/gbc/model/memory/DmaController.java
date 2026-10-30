@@ -6,7 +6,8 @@ package gbc.model.memory;
  * <h3>OAM DMA Timing</h3>
  * <p>OAM DMA transfers 160 bytes at 1 byte per 4 T-cycles (160 M-cycles total).
  * There is an 8 T-cycle startup delay after writing to FF46. During active DMA,
- * the CPU can only access HRAM (FF80-FFFE) and IO registers (FF00-FF7F).
+ * OAM is unreachable and the CPU conflicts with the bus the DMA reads from
+ * (VRAM bus or external bus); I/O, HRAM and the other bus stay accessible.
  *
  * <h3>Bus Conflicts</h3>
  * <p>On restart (writing FF46 while DMA is active), the previous transfer's
@@ -137,9 +138,20 @@ public class DmaController {
         if (dmaStartupDelay > 0 && !dmaWasRestarted) {
             return false;
         }
-        // During OAM DMA, CPU can access only I/O and HRAM ($FF00-$FFFF).
-        // All other regions are blocked regardless of source.
-        return (address & 0xFFFF) < 0xFF00;
+        int addr = address & 0xFFFF;
+        if (addr >= 0xFF00) {
+            return false; // I/O and HRAM are always reachable
+        }
+        if (addr >= 0xFE00) {
+            return true; // OAM belongs to the DMA
+        }
+        // DMA occupies either the VRAM bus or the external bus (ROM, SRAM,
+        // WRAM). The CPU only conflicts on the bus the DMA is reading from.
+        return isVramBus(addr) == isVramBus(dmaSourceBase);
+    }
+
+    private static boolean isVramBus(int address) {
+        return address >= 0x8000 && address < 0xA000;
     }
 
     // --- CGB HDMA ---

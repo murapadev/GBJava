@@ -20,26 +20,9 @@ public class ROM extends Cartridge {
 			this.written = new boolean[data.length];
 		}
 		// Allocate RAM if header indicates RAM
-		int ramSize = getRamSize(data[0x0149]);
+		int ramSize = headerRamSize(data);
 		if (ramSize > 0) {
 			this.ram = new byte[ramSize];
-		}
-	}
-
-	private int getRamSize(byte ramSizeType) {
-		switch (ramSizeType) {
-			case 0x01:
-				return 2 * 1024; // 2KB
-			case 0x02:
-				return 8 * 1024; // 8KB
-			case 0x03:
-				return 32 * 1024; // 32KB
-			case 0x04:
-				return 128 * 1024; // 128KB
-			case 0x05:
-				return 64 * 1024; // 64KB
-			default:
-				return 0;
 		}
 	}
 

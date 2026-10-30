@@ -74,6 +74,8 @@ public class GameBoyColor {
 			LOGGER.warning("Cannot insert cartridge: null");
 			return;
 		}
+		// Flush the outgoing game's battery RAM before it is replaced.
+		saveSRAM();
 		memory.loadCartridge(cartridge);
 		Path romPath = cartridge.getRomPath();
 		currentRomPath = romPath != null ? romPath.toString() : null;

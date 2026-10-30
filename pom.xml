@@ -6,7 +6,7 @@
 
     <groupId>dev.murapa</groupId>
     <artifactId>GBJava</artifactId>
-    <version>1.0.0</version>
+    <version>1.6.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>GBJava - Game Boy Emulator</name>
