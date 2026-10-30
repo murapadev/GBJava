@@ -18,13 +18,16 @@ class DmaControllerTest {
         dma.startDma(0xC0);
 
         assertTrue(dma.isDmaActive(), "DMA should be active after start");
-        assertFalse(dma.isBusLocked(0x8000), "Bus should not lock during initial startup delay");
+        assertFalse(dma.isBusLocked(0xC000), "Bus should not lock during initial startup delay");
 
         for (int i = 0; i < 8; i++) {
             dma.stepOamDma();
         }
 
-        assertTrue(dma.isBusLocked(0x8000), "Bus should lock once startup delay is over");
+        assertTrue(dma.isBusLocked(0xC000), "External bus should lock once startup delay is over");
+        assertTrue(dma.isBusLocked(0x0150), "ROM shares the external bus with WRAM");
+        assertTrue(dma.isBusLocked(0xFE00), "OAM is never reachable during DMA");
+        assertFalse(dma.isBusLocked(0x8000), "VRAM bus stays accessible for an external source");
         assertFalse(dma.isBusLocked(0xFF80), "HRAM/IO region should stay accessible");
 
         // 160 bytes, each transferred every 4 T-cycles.
