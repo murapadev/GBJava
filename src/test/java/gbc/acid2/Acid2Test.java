@@ -1,14 +1,20 @@
 package gbc.acid2;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.stream.IntStream;
+
+import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -50,6 +56,39 @@ class Acid2Test {
         System.out.println("dmg-acid2 framebuffer SHA-256: " + result.sha256);
         System.out.println("dmg-acid2 completed after " + result.cycles + " cycles, "
                 + result.instructions + " instructions, " + result.frames + " frames");
+
+        // Reference image from the dmg-acid2 repository (img/reference-dmg.png).
+        Path reference = TestRoms.resolve("dmg-acid2-reference.png");
+        if (Files.exists(reference)) {
+            int mismatches = countShadeMismatches(result.pixels, ImageIO.read(reference.toFile()));
+            assertEquals(0, mismatches, "dmg-acid2 pixels differing from the reference image");
+        }
+    }
+
+    /**
+     * Compares by shade rather than RGB so the result does not depend on the
+     * configured DMG palette: both images are reduced to luminance ranks.
+     */
+    private static int countShadeMismatches(int[] pixels, BufferedImage reference) {
+        int[] refPixels = reference.getRGB(0, 0, FrameBuffer.WIDTH, FrameBuffer.HEIGHT, null, 0, FrameBuffer.WIDTH);
+        int[] actual = shadeRanks(pixels);
+        int[] expected = shadeRanks(refPixels);
+        int mismatches = 0;
+        for (int i = 0; i < actual.length; i++) {
+            if (actual[i] != expected[i]) {
+                mismatches++;
+            }
+        }
+        return mismatches;
+    }
+
+    private static int[] shadeRanks(int[] argb) {
+        int[] levels = IntStream.of(argb).map(Acid2Test::luminance).distinct().sorted().toArray();
+        return IntStream.of(argb).map(c -> Arrays.binarySearch(levels, luminance(c))).toArray();
+    }
+
+    private static int luminance(int argb) {
+        return 299 * ((argb >> 16) & 0xFF) + 587 * ((argb >> 8) & 0xFF) + 114 * (argb & 0xFF);
     }
 
     @Test
@@ -136,7 +175,7 @@ class Acid2Test {
         long frames = fb.getFrameId();
 
         gbc.closeTrace();
-        return new Acid2Result(completed, cycles, instructions, frames, sha256);
+        return new Acid2Result(completed, cycles, instructions, frames, sha256, fb.getPixels().clone());
     }
 
     private String computeFrameBufferHash(FrameBuffer fb) throws Exception {
@@ -153,6 +192,7 @@ class Acid2Test {
         return HexFormat.of().formatHex(md.digest());
     }
 
-    private record Acid2Result(boolean completed, long cycles, long instructions, long frames, String sha256) {
+    private record Acid2Result(boolean completed, long cycles, long instructions, long frames, String sha256,
+            int[] pixels) {
     }
 }
