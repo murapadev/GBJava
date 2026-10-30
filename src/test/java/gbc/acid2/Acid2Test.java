@@ -10,9 +10,9 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HexFormat;
-import java.util.stream.IntStream;
+import java.util.Map;
 
 import javax.imageio.ImageIO;
 
@@ -33,11 +33,9 @@ import gbc.testsupport.TestRoms;
  * <p>
  * These tests render a reference image (a smiley face) when all PPU features
  * are implemented correctly. The test detects completion when the ROM executes
- * opcode 0x40 (LD B, B), then captures and checksums the framebuffer.
- * <p>
- * On first run with unknown checksum, the test will print the actual checksum
- * so it can be recorded. This allows detecting regressions even before a
- * pixel-perfect reference is achieved.
+ * opcode 0x40 (LD B, B), then captures the framebuffer. When the upstream
+ * reference image is placed next to the ROM ({@code dmg-acid2-reference.png},
+ * {@code cgb-acid2-reference.png}) the frame must match it pixel for pixel.
  */
 class Acid2Test {
 
@@ -58,37 +56,43 @@ class Acid2Test {
                 + result.instructions + " instructions, " + result.frames + " frames");
 
         // Reference image from the dmg-acid2 repository (img/reference-dmg.png).
-        Path reference = TestRoms.resolve("dmg-acid2-reference.png");
-        if (Files.exists(reference)) {
-            int mismatches = countShadeMismatches(result.pixels, ImageIO.read(reference.toFile()));
-            assertEquals(0, mismatches, "dmg-acid2 pixels differing from the reference image");
+        assertMatchesReference(result, TestRoms.resolve("dmg-acid2-reference.png"));
+    }
+
+    private static void assertMatchesReference(Acid2Result result, Path reference) throws Exception {
+        if (!Files.exists(reference)) {
+            return;
         }
+        BufferedImage image = ImageIO.read(reference.toFile());
+        int[] expected = image.getRGB(0, 0, FrameBuffer.WIDTH, FrameBuffer.HEIGHT, null, 0, FrameBuffer.WIDTH);
+        int mismatches = Math.max(countMappingMismatches(result.pixels, expected),
+                countMappingMismatches(expected, result.pixels));
+        assertEquals(0, mismatches, reference.getFileName() + ": pixels differing from the reference image");
     }
 
     /**
-     * Compares by shade rather than RGB so the result does not depend on the
-     * configured DMG palette: both images are reduced to luminance ranks.
+     * Palette-independent comparison: every colour in {@code from} should map
+     * to a single colour in {@code to}. Counts the pixels that disagree with
+     * the majority mapping of their colour. Checked in both directions so two
+     * colours cannot collapse into one.
      */
-    private static int countShadeMismatches(int[] pixels, BufferedImage reference) {
-        int[] refPixels = reference.getRGB(0, 0, FrameBuffer.WIDTH, FrameBuffer.HEIGHT, null, 0, FrameBuffer.WIDTH);
-        int[] actual = shadeRanks(pixels);
-        int[] expected = shadeRanks(refPixels);
+    private static int countMappingMismatches(int[] from, int[] to) {
+        Map<Integer, Map<Integer, Integer>> mapping = new HashMap<>();
+        for (int i = 0; i < from.length; i++) {
+            mapping.computeIfAbsent(from[i] & 0xFFFFFF, k -> new HashMap<>())
+                    .merge(to[i] & 0xFFFFFF, 1, Integer::sum);
+        }
         int mismatches = 0;
-        for (int i = 0; i < actual.length; i++) {
-            if (actual[i] != expected[i]) {
-                mismatches++;
+        for (Map<Integer, Integer> targets : mapping.values()) {
+            int total = 0;
+            int best = 0;
+            for (int count : targets.values()) {
+                total += count;
+                best = Math.max(best, count);
             }
+            mismatches += total - best;
         }
         return mismatches;
-    }
-
-    private static int[] shadeRanks(int[] argb) {
-        int[] levels = IntStream.of(argb).map(Acid2Test::luminance).distinct().sorted().toArray();
-        return IntStream.of(argb).map(c -> Arrays.binarySearch(levels, luminance(c))).toArray();
-    }
-
-    private static int luminance(int argb) {
-        return 299 * ((argb >> 16) & 0xFF) + 587 * ((argb >> 8) & 0xFF) + 114 * (argb & 0xFF);
     }
 
     @Test
@@ -103,12 +107,10 @@ class Acid2Test {
         System.out.println("cgb-acid2 completed=" + result.completed + " after " + result.cycles
                 + " cycles, " + result.instructions + " instructions, " + result.frames + " frames");
 
-        // CGB acid2 completion is tracked but not required yet — CGB PPU
-        // emulation has known gaps that prevent the test ROM from finishing.
-        // The checksum is still captured for regression tracking.
-        if (!result.completed) {
-            System.out.println("WARNING: cgb-acid2 did not reach completion marker (known CGB limitation)");
-        }
+        assertTrue(result.completed, "Test ROM should reach LD B,B completion marker");
+
+        // Reference image from the cgb-acid2 repository (img/reference.png).
+        assertMatchesReference(result, TestRoms.resolve("cgb-acid2-reference.png"));
     }
 
     private Acid2Result runAcid2(Path romPath, HardwareType hwType) throws Exception {
