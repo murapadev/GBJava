@@ -133,6 +133,17 @@ public abstract class Cartridge {
         return declared;
     }
 
+    /**
+     * True when the RAM only exists because of the {@link #headerRamSize}
+     * fallback. Real cartridges declare their RAM, so this RAM is never
+     * persisted to a .sav file.
+     */
+    protected boolean isFallbackRam() {
+        return data != null && data.length > 0x0149
+                && data[0x0149] == 0x00
+                && typeHasRam(data[0x0147] & 0xFF);
+    }
+
     private static boolean typeHasRam(int type) {
         return switch (type) {
             case 0x02, 0x03, 0x08, 0x09, 0x0C, 0x0D, 0x10, 0x12, 0x13, 0x1A, 0x1B, 0x1D, 0x1E -> true;
@@ -220,7 +231,7 @@ public abstract class Cartridge {
      * Only saves if the cartridge has a battery and RAM.
      */
     public void saveSRAM() {
-        if (!hasBattery || ram == null || ram.length == 0) {
+        if (!hasBattery || ram == null || ram.length == 0 || isFallbackRam()) {
             return;
         }
 
@@ -244,7 +255,7 @@ public abstract class Cartridge {
      * Only loads if the cartridge has a battery and a save file exists.
      */
     public void loadSRAM() {
-        if (!hasBattery || ram == null) {
+        if (!hasBattery || ram == null || isFallbackRam()) {
             return;
         }
 
