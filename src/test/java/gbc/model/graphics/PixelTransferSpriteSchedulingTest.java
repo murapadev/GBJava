@@ -23,7 +23,7 @@ class PixelTransferSpriteSchedulingTest {
 
         PixelTransfer transfer = new PixelTransfer(fifo, fetcher, memory, sprites);
         transfer.start();
-        transfer.tick();
+        tickUntilSpriteScheduled(transfer, fetcher);
 
         assertEquals(1, fetcher.addCalls, "One sprite should be scheduled");
         assertEquals(6, fetcher.lastAddedX, "Sprite scheduling should follow scanline X order");
@@ -42,7 +42,7 @@ class PixelTransferSpriteSchedulingTest {
 
         PixelTransfer transfer = new PixelTransfer(fifo, fetcher, memory, sprites);
         transfer.start();
-        transfer.tick();
+        tickUntilSpriteScheduled(transfer, fetcher);
 
         assertEquals(1, fetcher.addCalls, "One sprite should be scheduled");
         assertEquals(6, fetcher.lastAddedX, "Both sprites share the same X");
@@ -63,6 +63,13 @@ class PixelTransferSpriteSchedulingTest {
         assertTrue(continueTransfer, "Transfer should keep running while sprite fetch is in progress");
         assertEquals(0, transfer.getCurrentX(), "Visible X should not advance during sprite fetch stall");
         assertEquals(0, fifo.putCount, "No pixel should be pushed while sprite fetch is in progress");
+    }
+
+    // Objects are fetched once the output X reaches them, not ahead of time.
+    private static void tickUntilSpriteScheduled(PixelTransfer transfer, RecordingFetcher fetcher) {
+        while (fetcher.addCalls == 0 && transfer.tick()) {
+            // advance output
+        }
     }
 
     private static SpritePosition[] createSprites() {

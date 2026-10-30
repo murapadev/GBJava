@@ -99,14 +99,14 @@ public class PixelTransfer {
                 if (!s.isEnabled()) {
                     continue;
                 }
-                int offset;
-                if (s.getX() <= x) {
-                    // Sprite already started; drop left part
-                    offset = x - s.getX();
-                } else {
-                    // Sprite starts ahead in FIFO; use negative offset to shift right
-                    offset = -(s.getX() - x);
+                if (s.getX() > x) {
+                    // Fetch objects only once output reaches them, as hardware does.
+                    // Overlaying them ahead of time loses their pixels when the
+                    // window starts in between and clears the FIFO.
+                    continue;
                 }
+                // Sprite already started; drop left part
+                int offset = x - s.getX();
                 if (offset >= 8) {
                     // Already past sprite width; skip it.
                     sprites[i].disable();
@@ -116,13 +116,11 @@ public class PixelTransfer {
                 if (requiredFifo > fifoLen) {
                     // If the sprite has reached the current X but the FIFO is
                     // too short, stall output to let the fetcher fill the FIFO.
-                    if (offset >= 0) {
-                        int oamIndex = s.getOamIndex();
-                        if (s.getX() < stallX || (s.getX() == stallX && oamIndex < stallOamIndex)) {
-                            stallForSprite = true;
-                            stallX = s.getX();
-                            stallOamIndex = oamIndex;
-                        }
+                    int oamIndex = s.getOamIndex();
+                    if (s.getX() < stallX || (s.getX() == stallX && oamIndex < stallOamIndex)) {
+                        stallForSprite = true;
+                        stallX = s.getX();
+                        stallOamIndex = oamIndex;
                     }
                     continue;
                 }
